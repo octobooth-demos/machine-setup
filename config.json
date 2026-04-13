@@ -40,13 +40,25 @@
         {
             "name": "VS Code",
             "binary": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
-            "settings_dir": "Code"
+            "command": "code",
+            "settings_dir": "Code",
+            "windows_settings_dir": "Code"
         },
         {
             "name": "VS Code Insiders",
             "binary": "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
-            "settings_dir": "Code - Insiders"
+            "command": "code-insiders",
+            "settings_dir": "Code - Insiders",
+            "windows_settings_dir": "Code - Insiders"
         }
+    ],
+    "winget_packages": [
+        { "name": "Visual Studio Code", "id": "Microsoft.VisualStudioCode" },
+        { "name": "Visual Studio Code Insiders", "id": "Microsoft.VisualStudioCode.Insiders" },
+        { "name": "Windows Terminal", "id": "Microsoft.WindowsTerminal" },
+        { "name": "GitHub CLI", "id": "GitHub.cli" },
+        { "name": "VLC Media Player", "id": "VideoLAN.VLC" },
+        { "name": "GitHub Copilot CLI", "id": "GitHub.Copilot" }
     ],
     "vlc_settings": "osd=0 # Hide filename display\nloop=1 # Enable loop by default\nvideo-title-show=0 # Hide filename display"
 }
