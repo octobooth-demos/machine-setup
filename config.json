@@ -1,64 +1,65 @@
 {
-    "vscode_theme": "Default Dark+",
-    "vs_code_extensions": [
-        "GitHub.copilot",
-        "GitHub.copilot-chat",
-        "GitHub.codespaces",
-        "github.vscode-github-actions",
-        "GitHub.vscode-pull-request-github",
-        "GitHub.remotehub",
-        "GitHub.vscode-codeql"
-    ],
-    "gh_cli_extensions": [
-        "advanced-security/gh-sbom",
-        "github/gh-actions-importer",
-        "github/gh-classroom",
-        "github/gh-codeql",
-        "github/gh-copilot",
-        "github/gh-gei",
-        "github/gh-models",
-        "github/gh-skyline",
-        "github-samples/gh-game"
-    ],
-    "brew_casks": [
-        "visual-studio-code",
-        "visual-studio-code-insiders",
-        "vlc",
-        "copilot-cli",
-        "google-chrome",
-        "github"
-    ],
-    "brew_formulas": [
-        "gh"
-    ],
-    "pwa_sites": [
-    ],
-    "demo_sites": [
-        "https://github.com"
-    ],
-    "vscode_editors": [
-        {
-            "name": "VS Code",
-            "binary": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
-            "command": "code",
-            "settings_dir": "Code",
-            "windows_settings_dir": "Code"
-        },
-        {
-            "name": "VS Code Insiders",
-            "binary": "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
-            "command": "code-insiders",
-            "settings_dir": "Code - Insiders",
-            "windows_settings_dir": "Code - Insiders"
-        }
-    ],
-    "winget_packages": [
-        { "name": "Visual Studio Code", "id": "Microsoft.VisualStudioCode" },
-        { "name": "Visual Studio Code Insiders", "id": "Microsoft.VisualStudioCode.Insiders" },
-        { "name": "Windows Terminal", "id": "Microsoft.WindowsTerminal" },
-        { "name": "GitHub CLI", "id": "GitHub.cli" },
-        { "name": "VLC Media Player", "id": "VideoLAN.VLC" },
-        { "name": "GitHub Copilot CLI", "id": "GitHub.Copilot" }
-    ],
-    "vlc_settings": "osd=0 # Hide filename display\nloop=1 # Enable loop by default\nvideo-title-show=0 # Hide filename display"
+  "vscode_theme": "Default Dark+",
+  "vs_code_extensions": [
+    "GitHub.copilot",
+    "GitHub.copilot-chat",
+    "GitHub.codespaces",
+    "github.vscode-github-actions",
+    "GitHub.vscode-pull-request-github",
+    "GitHub.remotehub",
+    "GitHub.vscode-codeql"
+  ],
+  "gh_cli_extensions": [
+    "advanced-security/gh-sbom",
+    "github/gh-actions-importer",
+    "github/gh-classroom",
+    "github/gh-codeql",
+    "github/gh-copilot",
+    "github/gh-gei",
+    "github/gh-models",
+    "github/gh-skyline",
+    "github-samples/gh-game"
+  ],
+  "brew_casks": [
+    "visual-studio-code",
+    "visual-studio-code-insiders",
+    "vlc",
+    "copilot-cli",
+    "google-chrome",
+    "github"
+  ],
+  "brew_formulas": [
+    "gh"
+  ],
+  "pwa_sites": [],
+  "demo_sites": [
+    "https://github.com"
+  ],
+  "vscode_editors": [
+    {
+      "name": "VS Code",
+      "binary": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+      "command": "code",
+      "settings_dir": "Code",
+      "windows_settings_dir": "Code"
+    },
+    {
+      "name": "VS Code Insiders",
+      "binary": "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
+      "command": "code-insiders",
+      "settings_dir": "Code - Insiders",
+      "windows_settings_dir": "Code - Insiders"
+    }
+  ],
+  "winget_packages": [
+    "Microsoft.VisualStudioCode",
+    "Microsoft.VisualStudioCode.Insiders",
+    "Microsoft.WindowsTerminal",
+    "GitHub.cli",
+    "VideoLAN.VLC",
+    "GitHub.Copilot",
+    "Google.Chrome",
+    "GitHub.GitHubDesktop"
+  ],
+  "vlc_settings": "osd=0 # Hide filename display\nloop=1 # Enable loop by default\nvideo-title-show=0 # Hide filename display"
 }

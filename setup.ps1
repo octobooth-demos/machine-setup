@@ -23,7 +23,7 @@
 # Constants
 # ----------------------------------------
 
-$configPath = Join-Path $PSScriptRoot "config.json"
+$script:configPath = Join-Path $PSScriptRoot "config.json"
 $script:failedItems = @()
 
 # ----------------------------------------
@@ -35,7 +35,7 @@ function Write-Success { param([string]$Message) Write-Host "✅ $Message" -Fore
 function Write-Warn    { param([string]$Message) Write-Host "⚠️  $Message" -ForegroundColor Yellow }
 function Write-Err     { param([string]$Message) Write-Host "❌ $Message" -ForegroundColor Red }
 
-function Try-Install {
+function Invoke-SafeInstall {
     param(
         [string]$Description,
         [scriptblock]$Action
@@ -80,8 +80,8 @@ function Test-Prerequisites {
     }
 
     # Verify config.json exists
-    if (-not (Test-Path $configPath)) {
-        Write-Err "Config file not found: $configPath"
+    if (-not (Test-Path $script:configPath)) {
+        Write-Err "Config file not found: $script:configPath"
         return $false
     }
     Write-Success "config.json found"
@@ -100,7 +100,7 @@ function Test-Prerequisites {
 }
 
 function Import-Config {
-    $script:config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+    $script:config = Get-Content -Raw -Path $script:configPath | ConvertFrom-Json
 }
 
 # ----------------------------------------
@@ -111,13 +111,15 @@ function Install-Packages {
     Write-Info "Installing packages via winget..."
 
     foreach ($package in $config.winget_packages) {
-        Try-Install -Description "winget: $($package.name)" -Action {
-            winget install --id $package.id -e --accept-source-agreements --accept-package-agreements --silent 2>&1
+        Invoke-SafeInstall -Description "winget: $package" -Action {
+            winget install --id $package -e --accept-source-agreements --accept-package-agreements --silent 2>&1
         }
     }
 
     # Refresh PATH so newly installed tools are available
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+    Write-Success "Package installation complete"
 }
 
 function Install-EditorExtensions {
@@ -133,8 +135,9 @@ function Install-EditorExtensions {
     }
 
     Write-Info "Installing $Name extensions..."
+
     foreach ($ext in $config.vs_code_extensions) {
-        Try-Install -Description "$Name extension: $ext" -Action {
+    Invoke-SafeInstall -Description "$Name extension: $ext" -Action {
             & $Command --install-extension $ext 2>&1
         }
     }
@@ -148,8 +151,9 @@ function Install-GHExtensions {
     }
 
     Write-Info "Installing GitHub CLI extensions..."
+
     foreach ($ext in $config.gh_cli_extensions) {
-        Try-Install -Description "gh extension: $ext" -Action {
+        Invoke-SafeInstall -Description "gh extension: $ext" -Action {
             gh extension install $ext 2>&1
         }
     }
@@ -194,26 +198,30 @@ function Set-EditorTheme {
     $settings | ConvertTo-Json -Depth 10 | Out-File -FilePath $settingsPath -Force -Encoding UTF8
 }
 
-function Configure-Editors {
+function Initialize-Editors {
     foreach ($editor in $config.vscode_editors) {
         Install-EditorExtensions -Name $editor.name -Command $editor.command
         Set-EditorTheme -Name $editor.name -SettingsDir $editor.windows_settings_dir
     }
+
+    Write-Success "Editor configuration complete"
 }
 
-function Authenticate-GH {
+function Connect-GH {
     $ghExists = Get-Command gh -ErrorAction SilentlyContinue
     if ($null -eq $ghExists) {
         Write-Warn "GitHub CLI not found, skipping authentication."
         return
     }
 
-    if (-not (gh auth status 2>&1 | Out-Null; $LASTEXITCODE -eq 0)) {
+    gh auth status 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
         Write-Info "Please authenticate with GitHub..."
         gh auth login
     }
 
-    if (gh auth status 2>&1 | Out-Null; $LASTEXITCODE -eq 0) {
+    gh auth status 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
         Install-GHExtensions
         Write-Success "GitHub CLI extensions installed"
     } else {
@@ -236,7 +244,6 @@ function New-DemoLoader {
     $demoScript = [System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'load-demos.ps1')
 
     $lines = @()
-    $lines += "#!/usr/bin/env pwsh"
     $lines += "Write-Host 'Loading demo environment...' -ForegroundColor Blue"
     $lines += ""
 
@@ -286,11 +293,11 @@ Install-Packages
 Set-VLCConfiguration
 
 # Setup environments
-Authenticate-GH
+Connect-GH
 Install-PWAs
 
 # Install extensions and configure themes
-Configure-Editors
+Initialize-Editors
 
 # Create demo loader script
 New-DemoLoader
