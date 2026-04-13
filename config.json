@@ -20,10 +20,33 @@
         "github/gh-skyline",
         "github-samples/gh-game"
     ],
+    "brew_casks": [
+        "visual-studio-code",
+        "visual-studio-code-insiders",
+        "vlc",
+        "copilot-cli",
+        "google-chrome",
+        "github"
+    ],
+    "brew_formulas": [
+        "gh"
+    ],
     "pwa_sites": [
     ],
     "demo_sites": [
         "https://github.com"
+    ],
+    "vscode_editors": [
+        {
+            "name": "VS Code",
+            "binary": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+            "settings_dir": "Code"
+        },
+        {
+            "name": "VS Code Insiders",
+            "binary": "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
+            "settings_dir": "Code - Insiders"
+        }
     ],
     "vlc_settings": "osd=0 # Hide filename display\nloop=1 # Enable loop by default\nvideo-title-show=0 # Hide filename display"
 }

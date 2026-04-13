@@ -4,261 +4,269 @@
 # Installs and configures VS Code, VS Code Insiders, and GitHub tooling
 #
 
-# -----------------------------
-# Constants and Variables
-# -----------------------------
+# ----------------------------------------
+# Constants
+# ----------------------------------------
 
 # Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly RED='\033[0;31m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m' # No Color
 
 # Emojis
-CHECK="✅"
-WARN="⚠️"
-INFO="ℹ️"
-ERROR="❌"
+readonly CHECK="✅"
+readonly WARN="⚠️"
+readonly INFO="ℹ️"
+readonly ERROR="❌"
 
-CONFIG_FILE="/workspaces/machine-setup/config.json"
+readonly CONFIG_FILE="$(cd "$(dirname "$0")" && pwd)/config.json"
 
-# Load configuration from JSON file
-VSCODE_THEME=$(jq -r '.vscode_theme' "$CONFIG_FILE")
-vs_code_extensions=($(jq -r '.vs_code_extensions[]' "$CONFIG_FILE"))
-gh_cli_extensions=($(jq -r '.gh_cli_extensions[]' "$CONFIG_FILE"))
-# Update PWA sites loading to handle objects with name and url
-mapfile -t PWA_NAMES < <(jq -r '.pwa_sites[].name' "$CONFIG_FILE")
-mapfile -t PWA_URLS < <(jq -r '.pwa_sites[].url' "$CONFIG_FILE")
-DEMO_SITES=($(jq -r '.demo_sites[]' "$CONFIG_FILE"))
-VLC_SETTINGS=$(jq -r '.vlc_settings' "$CONFIG_FILE")
+# Mutable state
+failed_items=()
 
-# -----------------------------
+# ----------------------------------------
+# Logging Helpers
+# ----------------------------------------
+
+log_info()    { echo -e "${BLUE}${INFO} $1${NC}"; }
+log_success() { echo -e "${GREEN}${CHECK} $1${NC}"; }
+log_warn()    { echo -e "${YELLOW}${WARN} $1${NC}"; }
+log_error()   { echo -e "${RED}${ERROR} $1${NC}"; }
+
+# Runs a command and tracks failures without stopping the script
+# $1 = description for error reporting, remaining args = command to run
+try_install() {
+    local description="$1"
+    shift
+
+    if ! "$@" 2>&1; then
+        failed_items+=("$description")
+        log_error "Failed: $description"
+    fi
+}
+
+# Prints a summary of any failed installations
+print_summary() {
+    if [[ ${#failed_items[@]} -gt 0 ]]; then
+        echo ""
+        log_warn "The following items failed to install:"
+        for item in "${failed_items[@]}"; do
+            log_warn "  - $item"
+        done
+        echo ""
+    fi
+}
+
+# ----------------------------------------
+# Bootstrap
+# ----------------------------------------
+
+# Installs Homebrew if not present and updates it
+install_homebrew() {
+    if ! command -v brew &> /dev/null; then
+        log_info "Installing Homebrew..."
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    else
+        log_success "Homebrew is already installed"
+    fi
+
+    log_info "Updating Homebrew..."
+    brew update
+}
+
+# Ensures jq is installed (required to read config.json)
+install_jq() {
+    if ! command -v jq &> /dev/null; then
+        log_info "Installing jq..."
+        brew install jq
+    fi
+}
+
+# Load configuration from JSON file (called after jq is available)
+load_config() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        log_error "Config file not found: $CONFIG_FILE"
+        exit 1
+    fi
+
+    readonly VSCODE_THEME=$(jq -r '.vscode_theme' "$CONFIG_FILE")
+    readonly VLC_SETTINGS=$(jq -r '.vlc_settings' "$CONFIG_FILE")
+
+    mapfile -t vs_code_extensions < <(jq -r '.vs_code_extensions[]' "$CONFIG_FILE")
+    mapfile -t gh_cli_extensions < <(jq -r '.gh_cli_extensions[]' "$CONFIG_FILE")
+    mapfile -t brew_casks < <(jq -r '.brew_casks[]' "$CONFIG_FILE")
+    mapfile -t brew_formulas < <(jq -r '.brew_formulas[]' "$CONFIG_FILE")
+    mapfile -t pwa_names < <(jq -r '.pwa_sites[].name' "$CONFIG_FILE")
+    mapfile -t pwa_urls < <(jq -r '.pwa_sites[].url' "$CONFIG_FILE")
+    mapfile -t demo_sites < <(jq -r '.demo_sites[]' "$CONFIG_FILE")
+}
+
+# ----------------------------------------
 # Function Definitions
-# -----------------------------
-
-# Checks if Visual Studio Code is installed by verifying the application directory exists
-check_vscode() {
-    if [ -d "/Applications/Visual Studio Code.app" ]; then
-        echo -e "${GREEN}${CHECK} VS Code is already installed${NC}"
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Checks if Visual Studio Code Insiders is installed by verifying the application directory exists
-check_vscode_insiders() {
-    if [ -d "/Applications/Visual Studio Code - Insiders.app" ]; then
-        echo -e "${GREEN}${CHECK} VS Code Insiders is already installed${NC}"
-        return 0
-    else
-        return 1
-    fi
-}
+# ----------------------------------------
 
 # Configures VLC settings to hide filename display and enable loop by default
-configure_vlc_settings() {
-    echo -e "${BLUE}${INFO} Configuring VLC settings...${NC}"
-    
-    PREF_FILE="$HOME/Library/Preferences/org.videolan.vlc/vlcrc"
-    mkdir -p "$(dirname "$PREF_FILE")"
-    
+configure_vlc() {
+    log_info "Configuring VLC settings..."
+
+    local pref_file="$HOME/Library/Preferences/org.videolan.vlc/vlcrc"
+    mkdir -p "$(dirname "$pref_file")"
+
     # Check if we've already configured settings
-    if grep -q "# Setup-script-configured=true" "$PREF_FILE" 2>/dev/null; then
-        echo -e "${BLUE}${INFO} VLC settings already configured, skipping...${NC}"
+    if grep -q "# Setup-script-configured=true" "$pref_file" 2>/dev/null; then
+        log_info "VLC settings already configured, skipping..."
         return
     fi
-    
+
     # Kill VLC if running
     killall VLC 2>/dev/null || true
-    
+
     # Add our sentinel and settings
     {
         echo "# Setup-script-configured=true"
         echo "$VLC_SETTINGS"
-    } >> "$PREF_FILE"
-    
-    echo -e "${GREEN}${CHECK} VLC settings configured - please restart VLC${NC}"
+    } >> "$pref_file"
+
+    log_success "VLC settings configured - please restart VLC"
 }
 
-# Installs Homebrew if not present and updates it if already installed
-install_brew() {
-    if ! command -v brew &> /dev/null; then
-        echo -e "${BLUE}${INFO} Installing Homebrew...${NC}"
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    else
-        echo -e "${GREEN}${CHECK} Homebrew is already installed${NC}"
-    fi
-    echo -e "${BLUE}${INFO} Updating Homebrew...${NC}"
-    brew update
-}
+# Installs all Brew casks and formulas from config.json
+install_packages() {
+    log_info "Installing Brew casks..."
+    for cask in "${brew_casks[@]}"; do
+        try_install "brew cask: $cask" brew install --cask "$cask"
+    done
 
-# Installs GitHub CLI (gh) using Homebrew if not already installed
-install_gh() {
-    if ! command -v gh &> /dev/null; then
-        echo -e "${BLUE}${INFO} Installing GitHub CLI...${NC}"
-        brew install gh
-        return 0
-    else
-        echo -e "${GREEN}${CHECK} GitHub CLI is already installed${NC}"
-        return 1
-    fi
+    log_info "Installing Brew formulas..."
+    for formula in "${brew_formulas[@]}"; do
+        try_install "brew formula: $formula" brew install "$formula"
+    done
 }
 
 # Installs a suite of GitHub CLI extensions for enhanced functionality
 install_gh_extensions() {
-    echo -e "${BLUE}${INFO} Installing GitHub CLI extensions...${NC}"
-    for ext in "${gh_cli_extensions[@]}"
-    do
-        gh extension install "$ext"
+    log_info "Installing GitHub CLI extensions..."
+    for ext in "${gh_cli_extensions[@]}"; do
+        try_install "gh extension: $ext" gh extension install "$ext"
     done
 }
 
-# Installs VLC media player using Homebrew
-install_vlc() {
-    echo -e "${BLUE}${INFO} Installing VLC media player...${NC}"
-    brew install --cask vlc
-}
-
-# Installs Visual Studio Code using Homebrew if not already present
-install_vscode() {
-    if ! check_vscode; then
-        echo -e "${BLUE}${INFO} Installing VS Code...${NC}"
-        brew install --cask visual-studio-code
-        return 0
-    fi
-    return 1
-}
-
-# Installs predefined VS Code extensions using the VS Code CLI
+# Installs VS Code extensions for a given editor
+# $1 = display name, $2 = binary path
 install_vscode_extensions() {
-    echo -e "${BLUE}${INFO} Installing VS Code extensions...${NC}"
-    if ! "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --version &> /dev/null; then
-        echo -e "${RED}${ERROR} Error: VS Code binary not found${NC}"
+    local name="$1"
+    local binary="$2"
+
+    log_info "Installing $name extensions..."
+
+    if ! "$binary" --version &> /dev/null; then
+        log_error "Error: $name binary not found"
         return 1
     fi
-    
-    for ext in "${vs_code_extensions[@]}"
-    do
-        "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension "$ext"
-    done
-}
 
-# Installs Visual Studio Code Insiders using Homebrew if not already present
-install_vscode_insiders() {
-    if ! check_vscode_insiders; then
-        echo -e "${BLUE}${INFO} Installing VS Code Insiders...${NC}"
-        brew install --cask visual-studio-code-insiders
-        return 0
-    fi
-    return 1
-}
-
-# Installs predefined VS Code extensions for VS Code Insiders
-install_vscode_insiders_extensions() {
-    echo -e "${BLUE}${INFO} Installing VS Code Insiders extensions...${NC}"
-    if ! "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code" --version &> /dev/null; then
-        echo -e "${RED}${ERROR} Error: VS Code Insiders binary not found${NC}"
-        return 1
-    fi
-    
-    for ext in "${vs_code_extensions[@]}"
-    do
-        "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code" --install-extension "$ext"
+    for ext in "${vs_code_extensions[@]}"; do
+        try_install "$name extension: $ext" "$binary" --install-extension "$ext"
     done
 }
 
 # Ensures user is authenticated with GitHub CLI and installs extensions if authenticated
-setup_gh_auth() {
+authenticate_gh() {
     if command -v gh &> /dev/null; then
         if ! gh auth status &> /dev/null; then
-            echo -e "${BLUE}${INFO} Please login to GitHub CLI first...${NC}"
+            log_info "Please login to GitHub CLI first..."
             gh auth login
         fi
-        
+
         if gh auth status &> /dev/null; then
-            # install_gh_extensions
-            echo -e "${GREEN}${CHECK} GitHub CLI extensions installed${NC}"
+            install_gh_extensions
+            log_success "GitHub CLI extensions installed"
         else
-            echo -e "${WARN} GitHub CLI login required for installing extensions. Please run 'gh auth login' manually.${NC}"
+            log_warn "GitHub CLI login required for installing extensions. Please run 'gh auth login' manually."
         fi
     fi
 }
 
-# Guides user through GitHub web authentication process using Safari
-setup_github_web_auth() {
-    echo -e "${BLUE}${INFO} Opening GitHub.com in Safari...${NC}"
-    open -a Safari https://github.com
-    echo -e "${BLUE}${INFO} Please log in to GitHub.com in Safari with the demo account${NC}"
-    echo -e "${BLUE}${INFO} Press Enter once you have logged in...${NC}"
+# Guides user through GitHub web authentication process using Chrome
+authenticate_github_web() {
+    log_info "Opening GitHub.com in Chrome..."
+    open -a "Google Chrome" https://github.com
+
+    log_info "Please log in to GitHub.com in Chrome with the demo account"
+    log_info "Press Enter once you have logged in..."
     read -r
-    echo -e "${GREEN}${CHECK} GitHub web authentication confirmed${NC}"
+
+    log_success "GitHub web authentication confirmed"
 }
 
-# Assists user in setting up Progressive Web Apps (PWAs) for GitHub tools
-setup_safari_and_pwas() {
-    echo -e "${BLUE}${INFO} Opening required websites in Safari...${NC}"
-    
-    for i in "${!PWA_URLS[@]}"; do
-        open -a Safari "${PWA_URLS[$i]}"
-        echo -e "${BLUE}${INFO} Please manually add ${PWA_NAMES[$i]} (${PWA_URLS[$i]}) as a PWA by:${NC}"
-        echo -e "${BLUE}${INFO} 1. Click Share button in Safari${NC}"
-        echo -e "${BLUE}${INFO} 2. Select 'Add to Dock'${NC}"
-        echo -e "${BLUE}${INFO} Press Enter when done...${NC}"
+# Assists user in setting up Progressive Web Apps (PWAs)
+install_pwas() {
+    log_info "Opening required websites in Chrome..."
+
+    for i in "${!pwa_urls[@]}"; do
+        open -a "Google Chrome" "${pwa_urls[$i]}"
+        log_info "Please manually add ${pwa_names[$i]} (${pwa_urls[$i]}) as a PWA by:"
+        log_info "1. Click the three-dot menu in Chrome"
+        log_info "2. Select 'Install page as app...'"
+        log_info "Press Enter when done..."
         read -r
     done
 }
 
-# Sets the VS Code theme to the predefined value
-set_vscode_theme() {
-    echo -e "${BLUE}${INFO} Setting VS Code theme...${NC}"
-    VSCODE_SETTINGS="$HOME/Library/Application Support/Code/User/settings.json"
-    
-    mkdir -p "$(dirname "$VSCODE_SETTINGS")"
-    
-    if [ ! -f "$VSCODE_SETTINGS" ]; then
-        echo "{\"workbench.colorTheme\": \"$VSCODE_THEME\"}" > "$VSCODE_SETTINGS"
+# Sets the VS Code theme for a given editor
+# $1 = display name, $2 = settings dir name (e.g. "Code" or "Code - Insiders")
+configure_vscode_theme() {
+    local name="$1"
+    local settings_dir="$2"
+    local settings_file="$HOME/Library/Application Support/$settings_dir/User/settings.json"
+
+    log_info "Setting $name theme..."
+    mkdir -p "$(dirname "$settings_file")"
+
+    if [[ ! -f "$settings_file" ]]; then
+        echo "{\"workbench.colorTheme\": \"$VSCODE_THEME\"}" > "$settings_file"
     else
-        TMP_FILE=$(mktemp)
-        jq ". + {\"workbench.colorTheme\": \"$VSCODE_THEME\"}" "$VSCODE_SETTINGS" > "$TMP_FILE"
-        mv "$TMP_FILE" "$VSCODE_SETTINGS"
+        local tmp_file
+        tmp_file=$(mktemp)
+        jq ". + {\"workbench.colorTheme\": \"$VSCODE_THEME\"}" "$settings_file" > "$tmp_file"
+        mv "$tmp_file" "$settings_file"
     fi
 }
 
-# Sets the VS Code Insiders theme to the predefined value
-set_vscode_insiders_theme() {
-    echo -e "${BLUE}${INFO} Setting VS Code Insiders theme...${NC}"
-    VSCODE_SETTINGS="$HOME/Library/Application Support/Code - Insiders/User/settings.json"
-    
-    mkdir -p "$(dirname "$VSCODE_SETTINGS")"
-    
-    if [ ! -f "$VSCODE_SETTINGS" ]; then
-        echo "{\"workbench.colorTheme\": \"$VSCODE_THEME\"}" > "$VSCODE_SETTINGS"
-    else
-        TMP_FILE=$(mktemp)
-        jq ". + {\"workbench.colorTheme\": \"$VSCODE_THEME\"}" "$VSCODE_SETTINGS" > "$TMP_FILE"
-        mv "$TMP_FILE" "$VSCODE_SETTINGS"
-    fi
+# Installs extensions and configures themes for all editors in config.json
+configure_editors() {
+    local editor_count
+    editor_count=$(jq '.vscode_editors | length' "$CONFIG_FILE")
+
+    for i in $(seq 0 $((editor_count - 1))); do
+        local editor_name editor_binary editor_settings_dir
+        editor_name=$(jq -r ".vscode_editors[$i].name" "$CONFIG_FILE")
+        editor_binary=$(jq -r ".vscode_editors[$i].binary" "$CONFIG_FILE")
+        editor_settings_dir=$(jq -r ".vscode_editors[$i].settings_dir" "$CONFIG_FILE")
+
+        install_vscode_extensions "$editor_name" "$editor_binary"
+        configure_vscode_theme "$editor_name" "$editor_settings_dir"
+    done
 }
 
 # Creates a demo loader script to launch all required applications and sites
 create_demo_loader() {
-    echo -e "${BLUE}${INFO} Creating demo loader script...${NC}"
-    DEMO_SCRIPT="$HOME/Desktop/load-demos.sh"
-    
+    log_info "Creating demo loader script..."
+    local demo_script="$HOME/Desktop/load-demos.sh"
+
     # Create the script header
-    cat > "$DEMO_SCRIPT" << 'EOF'
+    cat > "$demo_script" << 'EOF'
 #!/bin/bash
 
 EOF
-    
+
     # Add the sites dynamically
-    echo "# Open all required sites in Safari" >> "$DEMO_SCRIPT"
-    printf 'open -a Safari %s\n\n' "$(printf '"%s" ' "${DEMO_SITES[@]}")" >> "$DEMO_SCRIPT"
-    
+    echo "# Open all required sites in Chrome" >> "$demo_script"
+    printf 'open -a "Google Chrome" %s\n\n' "$(printf '"%s" ' "${demo_sites[@]}")" >> "$demo_script"
+
     # Add the remaining standard content
-    cat >> "$DEMO_SCRIPT" << 'EOF'
+    cat >> "$demo_script" << 'EOF'
 # Open VS Code and VS Code Insiders
 open -a "Visual Studio Code"
 open -a "Visual Studio Code - Insiders"
@@ -266,45 +274,37 @@ open -a "Visual Studio Code - Insiders"
 # Open VLC pointing to Videos folder
 open -a VLC "$HOME/Videos"
 EOF
-    
-    chmod +x "$DEMO_SCRIPT"
-    echo -e "${GREEN}${CHECK} Created demo loader script at $DEMO_SCRIPT${NC}"
+
+    chmod +x "$demo_script"
+    log_success "Created demo loader script at $demo_script"
 }
 
-# -----------------------------
+# ----------------------------------------
 # Main Execution
-# -----------------------------
+# ----------------------------------------
+
+# Bootstrap: install homebrew and jq before loading config
+install_homebrew
+install_jq
+load_config
 
 # Initial web authentication
-setup_github_web_auth
+authenticate_github_web
 
-# Install core tools
-install_brew
-install_vscode
-install_vscode_insiders
-install_gh
-install_vlc
-configure_vlc_settings
+# Install packages
+install_packages
+configure_vlc
 
 # Setup environments
-setup_gh_auth
-setup_safari_and_pwas
+authenticate_gh
+install_pwas
 
 # Install extensions and configure themes
-install_vscode_extensions
-install_vscode_insiders_extensions
-set_vscode_theme
-set_vscode_insiders_theme
+configure_editors
 
 # Create demo loader script
 create_demo_loader
 
-# Verify installation
-if [ -d "/Applications/Visual Studio Code.app" ] && 
-   [ -d "/Applications/Visual Studio Code - Insiders.app" ] && 
-   [ -d "/Applications/VLC.app" ] &&
-   command -v gh &> /dev/null; then
-    echo -e "${GREEN}${CHECK} Script completed successfully${NC}"
-else
-    echo -e "${YELLOW}${WARN} There was an issue with the installation. Please check the error messages above.${NC}"
-fi
+# Print summary and finish
+print_summary
+log_success "Script completed successfully"
