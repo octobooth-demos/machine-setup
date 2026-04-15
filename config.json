@@ -1,65 +1,85 @@
 {
-  "vscode_theme": "Default Dark+",
-  "vs_code_extensions": [
-    "GitHub.copilot",
-    "GitHub.copilot-chat",
-    "GitHub.codespaces",
-    "github.vscode-github-actions",
-    "GitHub.vscode-pull-request-github",
-    "GitHub.remotehub",
-    "GitHub.vscode-codeql"
-  ],
-  "gh_cli_extensions": [
-    "advanced-security/gh-sbom",
-    "github/gh-actions-importer",
-    "github/gh-classroom",
-    "github/gh-codeql",
-    "github/gh-copilot",
-    "github/gh-gei",
-    "github/gh-models",
-    "github/gh-skyline",
-    "github-samples/gh-game"
-  ],
-  "brew_casks": [
-    "visual-studio-code",
-    "visual-studio-code-insiders",
-    "vlc",
-    "copilot-cli",
-    "google-chrome",
-    "github"
-  ],
-  "brew_formulas": [
-    "gh"
-  ],
-  "pwa_sites": [],
-  "demo_sites": [
-    "https://github.com"
-  ],
-  "vscode_editors": [
-    {
-      "name": "VS Code",
-      "binary": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
-      "command": "code",
-      "settings_dir": "Code",
-      "windows_settings_dir": "Code"
+  "shared": {
+    "vscode_theme": "Default Dark+",
+    "vs_code_extensions": [
+      "GitHub.copilot",
+      "GitHub.copilot-chat",
+      "GitHub.codespaces",
+      "github.vscode-github-actions",
+      "GitHub.vscode-pull-request-github",
+      "GitHub.remotehub",
+      "GitHub.vscode-codeql"
+    ],
+    "gh_cli_extensions": [
+      "advanced-security/gh-sbom",
+      "github/gh-actions-importer",
+      "github/gh-classroom",
+      "github/gh-codeql",
+      "github/gh-copilot",
+      "github/gh-gei",
+      "github/gh-models",
+      "github/gh-skyline",
+      "github-samples/gh-game"
+    ],
+    "pwa_sites": [],
+    "demo_sites": [
+      "https://github.com"
+    ],
+    "vlc_settings": "osd=0 # Hide filename display\nloop=1 # Enable loop by default\nvideo-title-show=0 # Hide filename display"
+  },
+  "mac": {
+    "packages": {
+      "casks": [
+        "visual-studio-code",
+        "visual-studio-code-insiders",
+        "vlc",
+        "copilot-cli",
+        "google-chrome",
+        "github"
+      ],
+      "formulas": [
+        "gh"
+      ]
     },
-    {
-      "name": "VS Code Insiders",
-      "binary": "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
-      "command": "code-insiders",
-      "settings_dir": "Code - Insiders",
-      "windows_settings_dir": "Code - Insiders"
-    }
-  ],
-  "winget_packages": [
-    "Microsoft.VisualStudioCode",
-    "Microsoft.VisualStudioCode.Insiders",
-    "Microsoft.WindowsTerminal",
-    "GitHub.cli",
-    "VideoLAN.VLC",
-    "GitHub.Copilot",
-    "Google.Chrome",
-    "GitHub.GitHubDesktop"
-  ],
-  "vlc_settings": "osd=0 # Hide filename display\nloop=1 # Enable loop by default\nvideo-title-show=0 # Hide filename display"
+    "editors": [
+      {
+        "name": "VS Code",
+        "binary": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+        "command": "code",
+        "settings_dir": "Code"
+      },
+      {
+        "name": "VS Code Insiders",
+        "binary": "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
+        "command": "code-insiders",
+        "settings_dir": "Code - Insiders"
+      }
+    ],
+    "post_install_launch": []
+  },
+  "windows": {
+    "packages": [
+      "Microsoft.VisualStudioCode",
+      "Microsoft.VisualStudioCode.Insiders",
+      "Microsoft.WindowsTerminal",
+      "GitHub.cli",
+      "VideoLAN.VLC",
+      "GitHub.Copilot",
+      "Google.Chrome",
+      "GitHub.GitHubDesktop"
+    ],
+    "editors": [
+      {
+        "name": "VS Code",
+        "command": "code",
+        "settings_dir": "Code"
+      },
+      {
+        "name": "VS Code Insiders",
+        "command": "code-insiders",
+        "settings_dir": "Code - Insiders"
+      }
+    ],
+    "post_install_launch": []
+  }
 }

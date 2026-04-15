@@ -110,7 +110,7 @@ function Import-Config {
 function Install-Packages {
     Write-Info "Installing packages via winget..."
 
-    foreach ($package in $config.winget_packages) {
+    foreach ($package in $config.windows.packages) {
         Invoke-SafeInstall -Description "winget: $package" -Action {
             winget install --id $package -e --accept-source-agreements --accept-package-agreements --silent 2>&1
         }
@@ -120,6 +120,27 @@ function Install-Packages {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
     Write-Success "Package installation complete"
+}
+
+function Start-PostInstallApps {
+    $apps = $config.windows.post_install_launch
+
+    if ($null -eq $apps -or $apps.Count -eq 0) {
+        return
+    }
+
+    Write-Info "Launching post-install apps..."
+
+    foreach ($app in $apps) {
+        Write-Info "Opening $app..."
+
+        try {
+            Start-Process $app
+        }
+        catch {
+            Write-Warn "Could not open $app"
+        }
+    }
 }
 
 function Install-EditorExtensions {
@@ -136,7 +157,7 @@ function Install-EditorExtensions {
 
     Write-Info "Installing $Name extensions..."
 
-    foreach ($ext in $config.vs_code_extensions) {
+    foreach ($ext in $config.shared.vs_code_extensions) {
     Invoke-SafeInstall -Description "$Name extension: $ext" -Action {
             & $Command --install-extension $ext 2>&1
         }
@@ -152,7 +173,7 @@ function Install-GHExtensions {
 
     Write-Info "Installing GitHub CLI extensions..."
 
-    foreach ($ext in $config.gh_cli_extensions) {
+    foreach ($ext in $config.shared.gh_cli_extensions) {
         Invoke-SafeInstall -Description "gh extension: $ext" -Action {
             gh extension install $ext 2>&1
         }
@@ -174,7 +195,7 @@ function Set-VLCConfiguration {
     }
 
     Add-Content -Path $vlcConfigPath -Value "# Setup-script-configured=true"
-    Add-Content -Path $vlcConfigPath -Value $config.vlc_settings
+    Add-Content -Path $vlcConfigPath -Value $config.shared.vlc_settings
 
     Write-Success "VLC settings configured - please restart VLC"
 }
@@ -194,14 +215,14 @@ function Set-EditorTheme {
     }
 
     $settings = Get-Content -Path $settingsPath | ConvertFrom-Json
-    $settings | Add-Member -NotePropertyName "workbench.colorTheme" -NotePropertyValue $config.vscode_theme -Force
+    $settings | Add-Member -NotePropertyName "workbench.colorTheme" -NotePropertyValue $config.shared.vscode_theme -Force
     $settings | ConvertTo-Json -Depth 10 | Out-File -FilePath $settingsPath -Force -Encoding UTF8
 }
 
 function Initialize-Editors {
-    foreach ($editor in $config.vscode_editors) {
+    foreach ($editor in $config.windows.editors) {
         Install-EditorExtensions -Name $editor.name -Command $editor.command
-        Set-EditorTheme -Name $editor.name -SettingsDir $editor.windows_settings_dir
+        Set-EditorTheme -Name $editor.name -SettingsDir $editor.settings_dir
     }
 
     Write-Success "Editor configuration complete"
@@ -232,7 +253,7 @@ function Connect-GH {
 function Install-PWAs {
     Write-Info "Opening required websites for PWA installation..."
 
-    foreach ($site in $config.pwa_sites) {
+    foreach ($site in $config.shared.pwa_sites) {
         Write-Info "Installing PWA for $($site.name)..."
         Start-Process "msedge" "--install-webapp=$($site.url)"
         Read-Host "Press Enter after you have added the PWA for $($site.name) in Edge"
@@ -249,7 +270,7 @@ function New-DemoLoader {
 
     # Add demo sites
     $lines += "# Open demo sites"
-    foreach ($url in $config.demo_sites) {
+    foreach ($url in $config.shared.demo_sites) {
         $lines += "Start-Process '$url'"
         $lines += "Start-Sleep -Seconds 1"
     }
@@ -257,7 +278,7 @@ function New-DemoLoader {
 
     # Add editors from config
     $lines += "# Open editors"
-    foreach ($editor in $config.vscode_editors) {
+    foreach ($editor in $config.windows.editors) {
         $lines += "& $($editor.command)"
     }
     $lines += ""
@@ -291,6 +312,9 @@ Import-Config
 # Install packages
 Install-Packages
 Set-VLCConfiguration
+
+# Launch post-install apps
+Start-PostInstallApps
 
 # Setup environments
 Connect-GH

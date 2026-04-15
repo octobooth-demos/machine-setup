@@ -91,16 +91,16 @@ load_config() {
         exit 1
     fi
 
-    readonly VSCODE_THEME=$(jq -r '.vscode_theme' "$CONFIG_FILE")
-    readonly VLC_SETTINGS=$(jq -r '.vlc_settings' "$CONFIG_FILE")
+    readonly VSCODE_THEME=$(jq -r '.shared.vscode_theme' "$CONFIG_FILE")
+    readonly VLC_SETTINGS=$(jq -r '.shared.vlc_settings' "$CONFIG_FILE")
 
-    mapfile -t vs_code_extensions < <(jq -r '.vs_code_extensions[]' "$CONFIG_FILE")
-    mapfile -t gh_cli_extensions < <(jq -r '.gh_cli_extensions[]' "$CONFIG_FILE")
-    mapfile -t brew_casks < <(jq -r '.brew_casks[]' "$CONFIG_FILE")
-    mapfile -t brew_formulas < <(jq -r '.brew_formulas[]' "$CONFIG_FILE")
-    mapfile -t pwa_names < <(jq -r '.pwa_sites[].name' "$CONFIG_FILE")
-    mapfile -t pwa_urls < <(jq -r '.pwa_sites[].url' "$CONFIG_FILE")
-    mapfile -t demo_sites < <(jq -r '.demo_sites[]' "$CONFIG_FILE")
+    mapfile -t vs_code_extensions < <(jq -r '.shared.vs_code_extensions[]' "$CONFIG_FILE")
+    mapfile -t gh_cli_extensions < <(jq -r '.shared.gh_cli_extensions[]' "$CONFIG_FILE")
+    mapfile -t brew_casks < <(jq -r '.mac.packages.casks[]' "$CONFIG_FILE")
+    mapfile -t brew_formulas < <(jq -r '.mac.packages.formulas[]' "$CONFIG_FILE")
+    mapfile -t pwa_names < <(jq -r '.shared.pwa_sites[].name' "$CONFIG_FILE")
+    mapfile -t pwa_urls < <(jq -r '.shared.pwa_sites[].url' "$CONFIG_FILE")
+    mapfile -t demo_sites < <(jq -r '.shared.demo_sites[]' "$CONFIG_FILE")
 }
 
 # ----------------------------------------
@@ -150,6 +150,22 @@ install_gh_extensions() {
     log_info "Installing GitHub CLI extensions..."
     for ext in "${gh_cli_extensions[@]}"; do
         try_install "gh extension: $ext" gh extension install "$ext"
+    done
+}
+
+# Launches apps that need to run after package installation
+launch_post_install_apps() {
+    mapfile -t post_install_apps < <(jq -r '.mac.post_install_launch[]' "$CONFIG_FILE")
+
+    if [[ ${#post_install_apps[@]} -eq 0 ]]; then
+        return
+    fi
+
+    log_info "Launching post-install apps..."
+
+    for app in "${post_install_apps[@]}"; do
+        log_info "Opening $app..."
+        open -a "$app" || log_warn "Could not open $app"
     done
 }
 
@@ -237,13 +253,13 @@ configure_vscode_theme() {
 # Installs extensions and configures themes for all editors in config.json
 configure_editors() {
     local editor_count
-    editor_count=$(jq '.vscode_editors | length' "$CONFIG_FILE")
+    editor_count=$(jq '.mac.editors | length' "$CONFIG_FILE")
 
     for i in $(seq 0 $((editor_count - 1))); do
         local editor_name editor_binary editor_settings_dir
-        editor_name=$(jq -r ".vscode_editors[$i].name" "$CONFIG_FILE")
-        editor_binary=$(jq -r ".vscode_editors[$i].binary" "$CONFIG_FILE")
-        editor_settings_dir=$(jq -r ".vscode_editors[$i].settings_dir" "$CONFIG_FILE")
+        editor_name=$(jq -r ".mac.editors[$i].name" "$CONFIG_FILE")
+        editor_binary=$(jq -r ".mac.editors[$i].binary" "$CONFIG_FILE")
+        editor_settings_dir=$(jq -r ".mac.editors[$i].settings_dir" "$CONFIG_FILE")
 
         install_vscode_extensions "$editor_name" "$editor_binary"
         configure_vscode_theme "$editor_name" "$editor_settings_dir"
@@ -294,6 +310,9 @@ authenticate_github_web
 # Install packages
 install_packages
 configure_vlc
+
+# Launch post-install apps (e.g., Docker)
+launch_post_install_apps
 
 # Setup environments
 authenticate_gh
