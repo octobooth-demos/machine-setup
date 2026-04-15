@@ -250,6 +250,34 @@ function Connect-GH {
     }
 }
 
+function Copy-Repos {
+    $reposDir = Join-Path $env:USERPROFILE "repos"
+
+    $repos = $config.shared.repos_to_clone
+    if ($null -eq $repos -or $repos.Count -eq 0) {
+        return
+    }
+
+    Write-Info "Cloning repos into $reposDir..."
+
+    if (-not (Test-Path $reposDir)) {
+        New-Item -Path $reposDir -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($repo in $repos) {
+        $repoName = ($repo -split '/')[-1]
+        $target = Join-Path $reposDir $repoName
+
+        if (Test-Path $target) {
+            Write-Info "$repoName already exists, skipping..."
+        } else {
+            Invoke-SafeInstall -Description "clone: $repo" -Action {
+                gh repo clone $repo $target 2>&1
+            }
+        }
+    }
+}
+
 function Install-PWAs {
     Write-Info "Opening required websites for PWA installation..."
 
@@ -258,6 +286,49 @@ function Install-PWAs {
         Start-Process "msedge" "--install-webapp=$($site.url)"
         Read-Host "Press Enter after you have added the PWA for $($site.name) in Edge"
     }
+}
+
+function Register-MCPServers {
+    Write-Info "Registering MCP servers for Copilot CLI..."
+
+    $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $env:USERPROFILE ".copilot" }
+    $mcpConfigPath = Join-Path $copilotHome "mcp-config.json"
+
+    # Create config directory if needed
+    if (-not (Test-Path $copilotHome)) {
+        New-Item -Path $copilotHome -ItemType Directory -Force | Out-Null
+    }
+
+    # Start with existing config or empty object
+    if (Test-Path $mcpConfigPath) {
+        $mcpConfig = Get-Content -Raw -Path $mcpConfigPath | ConvertFrom-Json
+    } else {
+        $mcpConfig = [PSCustomObject]@{ mcpServers = [PSCustomObject]@{} }
+    }
+
+    foreach ($server in $config.shared.mcp_servers) {
+        $serverConfig = if ($server.type -eq "local") {
+            [PSCustomObject]@{
+                tools   = @("*")
+                type    = $server.type
+                command = $server.command
+                args    = @($server.args)
+            }
+        } else {
+            [PSCustomObject]@{
+                tools   = @("*")
+                type    = $server.type
+                url     = $server.url
+                headers = [PSCustomObject]@{}
+            }
+        }
+
+        $mcpConfig.mcpServers | Add-Member -NotePropertyName $server.name -NotePropertyValue $serverConfig -Force
+        Write-Success "Registered MCP server: $($server.name)"
+    }
+
+    $mcpConfig | ConvertTo-Json -Depth 10 | Out-File -FilePath $mcpConfigPath -Force -Encoding UTF8
+    Write-Success "MCP servers written to $mcpConfigPath"
 }
 
 function New-DemoLoader {
@@ -318,10 +389,14 @@ Start-PostInstallApps
 
 # Setup environments
 Connect-GH
+Copy-Repos
 Install-PWAs
 
 # Install extensions and configure themes
 Initialize-Editors
+
+# Register MCP servers for Copilot CLI
+Register-MCPServers
 
 # Create demo loader script
 New-DemoLoader

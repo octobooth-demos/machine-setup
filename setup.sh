@@ -169,6 +169,31 @@ launch_post_install_apps() {
     done
 }
 
+# Clones repos from config into ~/repos
+clone_repos() {
+    local repos_dir="$HOME/repos"
+
+    mapfile -t repos < <(jq -r '.shared.repos_to_clone[]' "$CONFIG_FILE")
+
+    if [[ ${#repos[@]} -eq 0 ]]; then
+        return
+    fi
+
+    log_info "Cloning repos into $repos_dir..."
+    mkdir -p "$repos_dir"
+
+    for repo in "${repos[@]}"; do
+        local repo_name="${repo##*/}"
+        local target="$repos_dir/$repo_name"
+
+        if [[ -d "$target" ]]; then
+            log_info "$repo_name already exists, skipping..."
+        else
+            try_install "clone: $repo" gh repo clone "$repo" "$target"
+        fi
+    done
+}
+
 # Installs VS Code extensions for a given editor
 # $1 = display name, $2 = binary path
 install_vscode_extensions() {
@@ -266,6 +291,61 @@ configure_editors() {
     done
 }
 
+# Registers MCP servers in Copilot CLI config
+register_mcp_servers() {
+    local copilot_home="${COPILOT_HOME:-$HOME/.copilot}"
+    local mcp_config="$copilot_home/mcp-config.json"
+
+    log_info "Registering MCP servers for Copilot CLI..."
+
+    # Create config directory if needed
+    mkdir -p "$copilot_home"
+
+    # Start with existing config or empty object
+    if [[ -f "$mcp_config" ]]; then
+        local existing
+        existing=$(cat "$mcp_config")
+    else
+        local existing='{"mcpServers":{}}'
+    fi
+
+    local server_count
+    server_count=$(jq '.shared.mcp_servers | length' "$CONFIG_FILE")
+
+    for i in $(seq 0 $((server_count - 1))); do
+        local name type
+        name=$(jq -r ".shared.mcp_servers[$i].name" "$CONFIG_FILE")
+        type=$(jq -r ".shared.mcp_servers[$i].type" "$CONFIG_FILE")
+
+        if [[ "$type" == "local" ]]; then
+            local command args
+            command=$(jq -r ".shared.mcp_servers[$i].command" "$CONFIG_FILE")
+            args=$(jq -c ".shared.mcp_servers[$i].args" "$CONFIG_FILE")
+
+            existing=$(echo "$existing" | jq \
+                --arg name "$name" \
+                --arg type "$type" \
+                --arg cmd "$command" \
+                --argjson args "$args" \
+                '.mcpServers[$name] = {"tools": ["*"], "type": $type, "command": $cmd, "args": $args}')
+        else
+            local url
+            url=$(jq -r ".shared.mcp_servers[$i].url" "$CONFIG_FILE")
+
+            existing=$(echo "$existing" | jq \
+                --arg name "$name" \
+                --arg type "$type" \
+                --arg url "$url" \
+                '.mcpServers[$name] = {"tools": ["*"], "type": $type, "url": $url, "headers": {}}')
+        fi
+
+        log_success "Registered MCP server: $name"
+    done
+
+    echo "$existing" | jq . > "$mcp_config"
+    log_success "MCP servers written to $mcp_config"
+}
+
 # Creates a demo loader script to launch all required applications and sites
 create_demo_loader() {
     log_info "Creating demo loader script..."
@@ -316,10 +396,14 @@ launch_post_install_apps
 
 # Setup environments
 authenticate_gh
+clone_repos
 install_pwas
 
 # Install extensions and configure themes
 configure_editors
+
+# Register MCP servers for Copilot CLI
+register_mcp_servers
 
 # Create demo loader script
 create_demo_loader
