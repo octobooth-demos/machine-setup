@@ -68,7 +68,9 @@
         "github"
       ],
       "formulas": [
-        "gh"
+        "gh",
+        "python@3.14",
+        "nvm"
       ]
     },
     "editors": [

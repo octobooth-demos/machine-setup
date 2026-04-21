@@ -168,6 +168,17 @@ install_packages() {
     for formula in "${brew_formulas[@]}"; do
         try_install "brew formula: $formula" brew install "$formula"
     done
+
+    # Configure nvm and install Node LTS
+    if brew list nvm &> /dev/null; then
+        log_info "Configuring nvm and installing Node LTS..."
+        export NVM_DIR="$HOME/.nvm"
+        mkdir -p "$NVM_DIR"
+        # shellcheck disable=SC1091
+        . "$(brew --prefix nvm)/nvm.sh"
+        nvm install --lts
+        log_success "Node LTS installed: $(node --version)"
+    fi
 }
 
 # Installs a suite of GitHub CLI extensions for enhanced functionality
