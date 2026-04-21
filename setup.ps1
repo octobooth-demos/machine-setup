@@ -238,7 +238,7 @@ function Connect-GH {
     gh auth status 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Info "Please authenticate with GitHub..."
-        gh auth login
+        gh auth login --web
     }
 
     gh auth status 2>&1 | Out-Null

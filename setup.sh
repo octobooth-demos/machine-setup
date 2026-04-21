@@ -244,7 +244,7 @@ authenticate_gh() {
     if command -v gh &> /dev/null; then
         if ! gh auth status &> /dev/null; then
             log_info "Please login to GitHub CLI first..."
-            gh auth login
+            gh auth login --web
         fi
 
         if gh auth status &> /dev/null; then

@@ -61,7 +61,7 @@
     "packages": {
       "casks": [
         "visual-studio-code",
-        "visual-studio-code-insiders",
+        "visual-studio-code@insiders",
         "vlc",
         "copilot-cli",
         "google-chrome",
