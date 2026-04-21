@@ -68,10 +68,21 @@ install_homebrew() {
     if ! command -v brew &> /dev/null; then
         log_info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    else
-        log_success "Homebrew is already installed"
     fi
 
+    # Add brew to PATH for this session (needed on Apple Silicon and fresh installs)
+    if [[ -f /opt/homebrew/bin/brew ]]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [[ -f /usr/local/bin/brew ]]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+
+    if ! command -v brew &> /dev/null; then
+        log_error "Homebrew installation failed — brew not found in PATH"
+        exit 1
+    fi
+
+    log_success "Homebrew is available"
     log_info "Updating Homebrew..."
     brew update
 }
@@ -94,13 +105,27 @@ load_config() {
     readonly VSCODE_THEME=$(jq -r '.shared.vscode_theme' "$CONFIG_FILE")
     readonly VLC_SETTINGS=$(jq -r '.shared.vlc_settings' "$CONFIG_FILE")
 
-    mapfile -t vs_code_extensions < <(jq -r '.shared.vs_code_extensions[]' "$CONFIG_FILE")
-    mapfile -t gh_cli_extensions < <(jq -r '.shared.gh_cli_extensions[]' "$CONFIG_FILE")
-    mapfile -t brew_casks < <(jq -r '.mac.packages.casks[]' "$CONFIG_FILE")
-    mapfile -t brew_formulas < <(jq -r '.mac.packages.formulas[]' "$CONFIG_FILE")
-    mapfile -t pwa_names < <(jq -r '.shared.pwa_sites[].name' "$CONFIG_FILE")
-    mapfile -t pwa_urls < <(jq -r '.shared.pwa_sites[].url' "$CONFIG_FILE")
-    mapfile -t demo_sites < <(jq -r '.shared.demo_sites[]' "$CONFIG_FILE")
+    # Use read loop instead of mapfile for macOS bash 3.2 compatibility
+    vs_code_extensions=()
+    while IFS= read -r line; do vs_code_extensions+=("$line"); done < <(jq -r '.shared.vs_code_extensions[]' "$CONFIG_FILE")
+
+    gh_cli_extensions=()
+    while IFS= read -r line; do gh_cli_extensions+=("$line"); done < <(jq -r '.shared.gh_cli_extensions[]' "$CONFIG_FILE")
+
+    brew_casks=()
+    while IFS= read -r line; do brew_casks+=("$line"); done < <(jq -r '.mac.packages.casks[]' "$CONFIG_FILE")
+
+    brew_formulas=()
+    while IFS= read -r line; do brew_formulas+=("$line"); done < <(jq -r '.mac.packages.formulas[]' "$CONFIG_FILE")
+
+    pwa_names=()
+    while IFS= read -r line; do pwa_names+=("$line"); done < <(jq -r '.shared.pwa_sites[].name' "$CONFIG_FILE")
+
+    pwa_urls=()
+    while IFS= read -r line; do pwa_urls+=("$line"); done < <(jq -r '.shared.pwa_sites[].url' "$CONFIG_FILE")
+
+    demo_sites=()
+    while IFS= read -r line; do demo_sites+=("$line"); done < <(jq -r '.shared.demo_sites[]' "$CONFIG_FILE")
 }
 
 # ----------------------------------------
@@ -155,7 +180,8 @@ install_gh_extensions() {
 
 # Launches apps that need to run after package installation
 launch_post_install_apps() {
-    mapfile -t post_install_apps < <(jq -r '.mac.post_install_launch[]' "$CONFIG_FILE")
+    post_install_apps=()
+    while IFS= read -r line; do post_install_apps+=("$line"); done < <(jq -r '.mac.post_install_launch[]' "$CONFIG_FILE")
 
     if [[ ${#post_install_apps[@]} -eq 0 ]]; then
         return
@@ -173,7 +199,8 @@ launch_post_install_apps() {
 clone_repos() {
     local repos_dir="$HOME/repos"
 
-    mapfile -t repos < <(jq -r '.shared.repos_to_clone[]' "$CONFIG_FILE")
+    repos=()
+    while IFS= read -r line; do repos+=("$line"); done < <(jq -r '.shared.repos_to_clone[]' "$CONFIG_FILE")
 
     if [[ ${#repos[@]} -eq 0 ]]; then
         return
