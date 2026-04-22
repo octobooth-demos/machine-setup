@@ -15,7 +15,6 @@
       "github/gh-actions-importer",
       "github/gh-classroom",
       "github/gh-codeql",
-      "github/gh-copilot",
       "github/gh-gei",
       "github/gh-models",
       "github/gh-skyline",
@@ -82,7 +81,7 @@
       },
       {
         "name": "VS Code Insiders",
-        "binary": "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
+        "binary": "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code-insiders",
         "command": "code-insiders",
         "settings_dir": "Code - Insiders"
       }

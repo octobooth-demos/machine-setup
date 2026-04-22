@@ -27,6 +27,8 @@ $script:configPath = Join-Path $PSScriptRoot "config.json"
 $script:failedItems = @()
 $script:ForceReinstall = $env:FORCE_REINSTALL -eq "true"
 
+function Test-ShouldSkipInstalled { return -not $script:ForceReinstall }
+
 # ----------------------------------------
 # Logging Helpers
 # ----------------------------------------
@@ -108,22 +110,18 @@ function Import-Config {
 # Function Definitions
 # ----------------------------------------
 
+# Note: winget install is idempotent — no need to pre-check installed packages.
+# Chrome is an exception: it may be pre-installed outside winget (e.g., by MDM
+# or OEM image), so winget wouldn't detect it and would fail on conflict.
 function Install-Packages {
     Write-Info "Installing packages via winget..."
 
     foreach ($package in $config.windows.packages) {
-        if (-not $script:ForceReinstall) {
-            # Chrome is often pre-installed outside of winget — check the file system
-            if ($package -eq "Google.Chrome" -and (Test-Path "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe")) {
-                Write-Success "Already installed: $package (found in Program Files)"
-                continue
-            }
-
-            $listResult = winget list --id $package -e --accept-source-agreements --disable-interactivity 2>&1
-            if ($LASTEXITCODE -eq 0 -and $listResult -notmatch "No installed package found") {
-                Write-Success "Already installed: $package (winget)"
-                continue
-            }
+        # Chrome may be installed outside of winget (MDM, OEM, manual download, etc.)
+        # so we check the filesystem to avoid install conflicts
+        if ((Test-ShouldSkipInstalled) -and $package -eq "Google.Chrome" -and (Test-Path "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe")) {
+            Write-Success "Already installed: $package (found in Program Files)"
+            continue
         }
 
         Invoke-SafeInstall -Description "winget: $package" -Action {
@@ -173,44 +171,26 @@ function Install-EditorExtensions {
     Write-Info "Installing $Name extensions..."
 
     $installedExts = @()
-    $builtinExts = @()
-    if (-not $script:ForceReinstall) {
+    if (Test-ShouldSkipInstalled) {
         $rawExts = & $Command --list-extensions 2>&1
         if ($rawExts) {
             $installedExts = $rawExts | ForEach-Object { $_.ToLower() }
         }
-
-        # Detect built-in extensions bundled with the editor (e.g. Copilot in Insiders)
-        $cmdPath = (Get-Command $Command).Source
-        $binDir = Split-Path $cmdPath
-        $appRoot = Split-Path $binDir
-        $extensionsDir = Join-Path $appRoot "resources" "app" "extensions"
-        if (Test-Path $extensionsDir) {
-            $builtinExts = Get-ChildItem -Path $extensionsDir -Filter "package.json" -Recurse -Depth 1 |
-                ForEach-Object {
-                    $pkg = Get-Content $_.FullName -Raw | ConvertFrom-Json
-                    if ($pkg.publisher -and $pkg.name) {
-                        "$($pkg.publisher).$($pkg.name)".ToLower()
-                    }
-                } | Where-Object { $_ }
-        }
     }
 
     foreach ($ext in $config.shared.vs_code_extensions) {
-        if (-not $script:ForceReinstall -and ($installedExts -contains $ext.ToLower())) {
+        if ((Test-ShouldSkipInstalled) -and ($installedExts -contains $ext.ToLower())) {
             Write-Success "Already installed: $ext ($Name extension)"
             continue
         }
-        if (-not $script:ForceReinstall -and ($builtinExts -contains $ext.ToLower())) {
-            Write-Success "Built-in: $ext ($Name), skipping..."
-            continue
-        }
 
+        # Attempt install; handle built-in conflicts gracefully
+        # (e.g., Copilot is now bundled in VS Code/Insiders)
         try {
             $output = & $Command --install-extension $ext 2>&1
             if ($LASTEXITCODE -ne 0) {
                 if ($output -match "built-in extension") {
-                    Write-Success "Built-in dependency conflict: $ext ($Name), skipping..."
+                    Write-Success "Built-in: $ext ($Name), skipping..."
                 } else {
                     $script:failedItems += "$Name extension: $ext"
                     Write-Err "Failed: $Name extension: $ext"
@@ -234,7 +214,7 @@ function Install-GHExtensions {
     Write-Info "Installing GitHub CLI extensions..."
 
     $installedExts = @()
-    if (-not $script:ForceReinstall) {
+    if (Test-ShouldSkipInstalled) {
         $rawList = gh extension list 2>&1
         if ($LASTEXITCODE -eq 0 -and $rawList) {
             $installedExts = $rawList | ForEach-Object { ($_ -split '\t')[1] } | Where-Object { $_ }
@@ -242,10 +222,11 @@ function Install-GHExtensions {
     }
 
     foreach ($ext in $config.shared.gh_cli_extensions) {
-        if (-not $script:ForceReinstall -and ($installedExts -contains $ext)) {
+        if ((Test-ShouldSkipInstalled) -and ($installedExts -contains $ext)) {
             Write-Success "Already installed: $ext (gh extension)"
             continue
         }
+
         Invoke-SafeInstall -Description "gh extension: $ext" -Action {
             gh extension install $ext 2>&1
         }
@@ -256,7 +237,7 @@ function Set-VLCConfiguration {
     Write-Info "Configuring VLC settings..."
     $vlcConfigPath = "$env:APPDATA\vlc\vlcrc"
 
-    if (Test-Path $vlcConfigPath) {
+    if ((Test-ShouldSkipInstalled) -and (Test-Path $vlcConfigPath)) {
         if (Select-String -Path $vlcConfigPath -Pattern "Setup-script-configured=true" -Quiet) {
             Write-Info "VLC settings already configured, skipping..."
             return
@@ -340,7 +321,7 @@ function Copy-Repos {
         $repoName = ($repo -split '/')[-1]
         $target = Join-Path $reposDir $repoName
 
-        if (Test-Path $target) {
+        if ((Test-ShouldSkipInstalled) -and (Test-Path $target)) {
             Write-Info "$repoName already exists, skipping..."
         } else {
             Invoke-SafeInstall -Description "clone: $repo" -Action {
@@ -475,4 +456,8 @@ New-DemoLoader
 
 # Print summary and finish
 Write-Summary
+if ($script:failedItems.Count -gt 0) {
+    Write-Warn "Script completed with $($script:failedItems.Count) failure(s)"
+    exit 1
+}
 Write-Success "Script completed successfully"
