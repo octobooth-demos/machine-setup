@@ -23,6 +23,9 @@ readonly ERROR="❌"
 
 readonly CONFIG_FILE="$(cd "$(dirname "$0")" && pwd)/config.json"
 
+# When true, skip detection is bypassed and everything is reinstalled
+FORCE_REINSTALL="${FORCE_REINSTALL:-false}"
+
 # Mutable state
 failed_items=()
 
@@ -160,12 +163,33 @@ configure_vlc() {
 # Installs all Brew casks and formulas from config.json
 install_packages() {
     log_info "Installing Brew casks..."
+
+    local installed_casks=""
+    local installed_formulas=""
+    if [[ "$FORCE_REINSTALL" != "true" ]]; then
+        installed_casks=$(brew list --cask 2>/dev/null || true)
+        installed_formulas=$(brew list --formula 2>/dev/null || true)
+    fi
+
     for cask in "${brew_casks[@]}"; do
+        if [[ "$FORCE_REINSTALL" != "true" ]] && echo "$installed_casks" | grep -qx "$cask"; then
+            log_success "Already installed: $cask (cask)"
+            continue
+        fi
+        # Chrome is often installed outside of Homebrew — check for the app bundle
+        if [[ "$FORCE_REINSTALL" != "true" ]] && [[ "$cask" == "google-chrome" ]] && [[ -d "/Applications/Google Chrome.app" ]]; then
+            log_success "Already installed: $cask (found in /Applications)"
+            continue
+        fi
         try_install "brew cask: $cask" brew install --cask "$cask"
     done
 
     log_info "Installing Brew formulas..."
     for formula in "${brew_formulas[@]}"; do
+        if [[ "$FORCE_REINSTALL" != "true" ]] && echo "$installed_formulas" | grep -qx "$formula"; then
+            log_success "Already installed: $formula (formula)"
+            continue
+        fi
         try_install "brew formula: $formula" brew install "$formula"
     done
 
@@ -184,7 +208,17 @@ install_packages() {
 # Installs a suite of GitHub CLI extensions for enhanced functionality
 install_gh_extensions() {
     log_info "Installing GitHub CLI extensions..."
+
+    local installed_exts=""
+    if [[ "$FORCE_REINSTALL" != "true" ]]; then
+        installed_exts=$(gh extension list 2>/dev/null | awk '{print $2}' || true)
+    fi
+
     for ext in "${gh_cli_extensions[@]}"; do
+        if [[ "$FORCE_REINSTALL" != "true" ]] && echo "$installed_exts" | grep -qx "$ext"; then
+            log_success "Already installed: $ext (gh extension)"
+            continue
+        fi
         try_install "gh extension: $ext" gh extension install "$ext"
     done
 }
@@ -245,8 +279,46 @@ install_vscode_extensions() {
         return 1
     fi
 
+    local installed_exts=""
+    local builtin_exts=""
+    if [[ "$FORCE_REINSTALL" != "true" ]]; then
+        installed_exts=$("$binary" --list-extensions 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)
+
+        # Detect built-in extensions bundled with the editor (e.g. Copilot in Insiders)
+        local app_dir
+        app_dir="$(dirname "$(dirname "$binary")")"
+        local extensions_dir="$app_dir/extensions"
+        if [[ -d "$extensions_dir" ]]; then
+            builtin_exts=$(
+                for pkg in "$extensions_dir"/*/package.json; do
+                    [[ -f "$pkg" ]] && jq -r '"\(.publisher).\(.name)"' "$pkg" 2>/dev/null
+                done | tr '[:upper:]' '[:lower:]'
+            )
+        fi
+    fi
+
     for ext in "${vs_code_extensions[@]}"; do
-        try_install "$name extension: $ext" "$binary" --install-extension "$ext"
+        local ext_lower
+        ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
+        if [[ "$FORCE_REINSTALL" != "true" ]] && echo "$installed_exts" | grep -qx "$ext_lower"; then
+            log_success "Already installed: $ext ($name extension)"
+            continue
+        fi
+        if [[ "$FORCE_REINSTALL" != "true" ]] && echo "$builtin_exts" | grep -qx "$ext_lower"; then
+            log_success "Built-in: $ext ($name), skipping..."
+            continue
+        fi
+
+        local output
+        output=$("$binary" --install-extension "$ext" 2>&1)
+        if [[ $? -ne 0 ]]; then
+            if echo "$output" | grep -q "built-in extension"; then
+                log_success "Built-in dependency conflict: $ext ($name), skipping..."
+            else
+                failed_items+=("$name extension: $ext")
+                log_error "Failed: $name extension: $ext"
+            fi
+        fi
     done
 }
 

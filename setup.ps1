@@ -25,6 +25,7 @@
 
 $script:configPath = Join-Path $PSScriptRoot "config.json"
 $script:failedItems = @()
+$script:ForceReinstall = $env:FORCE_REINSTALL -eq "true"
 
 # ----------------------------------------
 # Logging Helpers
@@ -111,6 +112,20 @@ function Install-Packages {
     Write-Info "Installing packages via winget..."
 
     foreach ($package in $config.windows.packages) {
+        if (-not $script:ForceReinstall) {
+            # Chrome is often pre-installed outside of winget — check the file system
+            if ($package -eq "Google.Chrome" -and (Test-Path "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe")) {
+                Write-Success "Already installed: $package (found in Program Files)"
+                continue
+            }
+
+            $listResult = winget list --id $package -e --accept-source-agreements --disable-interactivity 2>&1
+            if ($LASTEXITCODE -eq 0 -and $listResult -notmatch "No installed package found") {
+                Write-Success "Already installed: $package (winget)"
+                continue
+            }
+        }
+
         Invoke-SafeInstall -Description "winget: $package" -Action {
             winget install --id $package -e --accept-source-agreements --accept-package-agreements --silent 2>&1
         }
@@ -157,9 +172,54 @@ function Install-EditorExtensions {
 
     Write-Info "Installing $Name extensions..."
 
+    $installedExts = @()
+    $builtinExts = @()
+    if (-not $script:ForceReinstall) {
+        $rawExts = & $Command --list-extensions 2>&1
+        if ($rawExts) {
+            $installedExts = $rawExts | ForEach-Object { $_.ToLower() }
+        }
+
+        # Detect built-in extensions bundled with the editor (e.g. Copilot in Insiders)
+        $cmdPath = (Get-Command $Command).Source
+        $binDir = Split-Path $cmdPath
+        $appRoot = Split-Path $binDir
+        $extensionsDir = Join-Path $appRoot "resources" "app" "extensions"
+        if (Test-Path $extensionsDir) {
+            $builtinExts = Get-ChildItem -Path $extensionsDir -Filter "package.json" -Recurse -Depth 1 |
+                ForEach-Object {
+                    $pkg = Get-Content $_.FullName -Raw | ConvertFrom-Json
+                    if ($pkg.publisher -and $pkg.name) {
+                        "$($pkg.publisher).$($pkg.name)".ToLower()
+                    }
+                } | Where-Object { $_ }
+        }
+    }
+
     foreach ($ext in $config.shared.vs_code_extensions) {
-    Invoke-SafeInstall -Description "$Name extension: $ext" -Action {
-            & $Command --install-extension $ext 2>&1
+        if (-not $script:ForceReinstall -and ($installedExts -contains $ext.ToLower())) {
+            Write-Success "Already installed: $ext ($Name extension)"
+            continue
+        }
+        if (-not $script:ForceReinstall -and ($builtinExts -contains $ext.ToLower())) {
+            Write-Success "Built-in: $ext ($Name), skipping..."
+            continue
+        }
+
+        try {
+            $output = & $Command --install-extension $ext 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                if ($output -match "built-in extension") {
+                    Write-Success "Built-in dependency conflict: $ext ($Name), skipping..."
+                } else {
+                    $script:failedItems += "$Name extension: $ext"
+                    Write-Err "Failed: $Name extension: $ext"
+                }
+            }
+        }
+        catch {
+            $script:failedItems += "$Name extension: $ext"
+            Write-Err "Failed: $Name extension: $ext - $_"
         }
     }
 }
@@ -173,7 +233,19 @@ function Install-GHExtensions {
 
     Write-Info "Installing GitHub CLI extensions..."
 
+    $installedExts = @()
+    if (-not $script:ForceReinstall) {
+        $rawList = gh extension list 2>&1
+        if ($LASTEXITCODE -eq 0 -and $rawList) {
+            $installedExts = $rawList | ForEach-Object { ($_ -split '\t')[1] } | Where-Object { $_ }
+        }
+    }
+
     foreach ($ext in $config.shared.gh_cli_extensions) {
+        if (-not $script:ForceReinstall -and ($installedExts -contains $ext)) {
+            Write-Success "Already installed: $ext (gh extension)"
+            continue
+        }
         Invoke-SafeInstall -Description "gh extension: $ext" -Action {
             gh extension install $ext 2>&1
         }
