@@ -197,6 +197,20 @@ install_packages() {
         . "$(brew --prefix nvm)/nvm.sh"
         nvm install --lts
         log_success "Node LTS installed: $(node --version)"
+
+        # Ensure nvm is loaded in future terminal sessions
+        local shell_rc="$HOME/.zshrc"
+        if ! grep -q 'NVM_DIR' "$shell_rc" 2>/dev/null; then
+            log_info "Adding nvm config to $shell_rc..."
+            {
+                echo ''
+                echo '# nvm (Node Version Manager)'
+                echo 'export NVM_DIR="$HOME/.nvm"'
+                echo '[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"'
+                echo '[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"'
+            } >> "$shell_rc"
+            log_success "nvm config added to $shell_rc"
+        fi
     fi
 }
 
