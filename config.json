@@ -51,9 +51,9 @@
       }
     ],
     "repos_to_clone": [
-      "octobooth/setup-scripts",
-      "octobooth/tailspin-toys",
-      "octobooth/security-octo-supply"
+      "octobooth-demos/repo-setup-scripts",
+      "octobooth-demos/tailspin-toys",
+      "octobooth-demos/security-octo-supply"
     ]
   },
   "mac": {
