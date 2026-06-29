@@ -236,6 +236,7 @@ function Install-GHExtensions {
 function Set-VLCConfiguration {
     Write-Info "Configuring VLC settings..."
     $vlcConfigPath = "$env:APPDATA\vlc\vlcrc"
+    Stop-Process -Name "vlc" -ErrorAction SilentlyContinue
 
     if ((Test-ShouldSkipInstalled) -and (Test-Path $vlcConfigPath)) {
         if (Select-String -Path $vlcConfigPath -Pattern "Setup-script-configured=true" -Quiet) {
@@ -267,7 +268,7 @@ function Set-EditorTheme {
         "{}" | Out-File -FilePath $settingsPath -Encoding UTF8
     }
 
-    $settings = Get-Content -Path $settingsPath | ConvertFrom-Json
+    $settings = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
     $settings | Add-Member -NotePropertyName "workbench.colorTheme" -NotePropertyValue $config.shared.vscode_theme -Force
     $settings | ConvertTo-Json -Depth 10 | Out-File -FilePath $settingsPath -Force -Encoding UTF8
 }
@@ -303,6 +304,39 @@ function Connect-GH {
     }
 }
 
+function Get-ChromePath {
+    $candidatePaths = @(
+        (Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "Google\Chrome\Application\chrome.exe")
+    ) | Where-Object { $_ -and (Test-Path $_) }
+
+    if ($candidatePaths.Count -gt 0) {
+        return $candidatePaths[0]
+    }
+
+    $chromeCommand = Get-Command chrome -ErrorAction SilentlyContinue
+    if ($null -ne $chromeCommand) {
+        return $chromeCommand.Source
+    }
+
+    return $null
+}
+
+function Connect-GitHubWeb {
+    Write-Info "Opening GitHub.com in Chrome..."
+    $chromePath = Get-ChromePath
+
+    if ($null -ne $chromePath) {
+        Start-Process -FilePath $chromePath -ArgumentList "https://github.com"
+    } else {
+        Write-Warn "Google Chrome was not found. Please open https://github.com manually."
+    }
+
+    Write-Info "Please log in to GitHub.com in Chrome with the demo account"
+    [void](Read-Host "Press Enter once you have logged in")
+    Write-Success "GitHub web authentication confirmed"
+}
+
 function Copy-Repos {
     $reposDir = Join-Path $env:USERPROFILE "repos"
 
@@ -331,16 +365,6 @@ function Copy-Repos {
     }
 }
 
-function Install-PWAs {
-    Write-Info "Opening required websites for PWA installation..."
-
-    foreach ($site in $config.shared.pwa_sites) {
-        Write-Info "Installing PWA for $($site.name)..."
-        Start-Process "msedge" "--install-webapp=$($site.url)"
-        Read-Host "Press Enter after you have added the PWA for $($site.name) in Edge"
-    }
-}
-
 function Register-MCPServers {
     Write-Info "Registering MCP servers for Copilot CLI..."
 
@@ -357,6 +381,10 @@ function Register-MCPServers {
         $mcpConfig = Get-Content -Raw -Path $mcpConfigPath | ConvertFrom-Json
     } else {
         $mcpConfig = [PSCustomObject]@{ mcpServers = [PSCustomObject]@{} }
+    }
+
+    if ($null -eq $mcpConfig.mcpServers) {
+        $mcpConfig | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue ([PSCustomObject]@{}) -Force
     }
 
     foreach ($server in $config.shared.mcp_servers) {
@@ -384,9 +412,28 @@ function Register-MCPServers {
     Write-Success "MCP servers written to $mcpConfigPath"
 }
 
+function Get-DesktopPath {
+    if ($env:SETUP_SCRIPT_DESKTOP_PATH) {
+        return $env:SETUP_SCRIPT_DESKTOP_PATH
+    }
+
+    $desktopPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
+    if ($desktopPath) {
+        return $desktopPath
+    }
+
+    if ($env:USERPROFILE) {
+        return (Join-Path $env:USERPROFILE "Desktop")
+    }
+
+    return [Environment]::GetFolderPath("Desktop")
+}
+
 function New-DemoLoader {
     Write-Info "Creating demo loader script..."
-    $demoScript = [System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'load-demos.ps1')
+    $desktopPath = Get-DesktopPath
+    $demoScript = Join-Path $desktopPath "load-demos.ps1"
+    New-Item -Path $desktopPath -ItemType Directory -Force | Out-Null
 
     $lines = @()
     $lines += "Write-Host 'Loading demo environment...' -ForegroundColor Blue"
@@ -422,42 +469,54 @@ function New-DemoLoader {
 # Main Execution
 # ----------------------------------------
 
-$ErrorActionPreference = "Continue"
+function Invoke-Main {
+    $ErrorActionPreference = "Continue"
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "Starting setup script - $(Get-Date)"    -ForegroundColor Cyan
-Write-Host "Running from: $PSScriptRoot"             -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "Starting setup script - $(Get-Date)"    -ForegroundColor Cyan
+    Write-Host "Running from: $PSScriptRoot"             -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
 
-# Bootstrap
-if (-not (Test-Prerequisites)) { return }
-Import-Config
+    # Bootstrap
+    if (-not (Test-Prerequisites)) { return }
+    Import-Config
 
-# Install packages
-Install-Packages
-Set-VLCConfiguration
+    # Install packages
+    Install-Packages
+    Set-VLCConfiguration
 
-# Launch post-install apps
-Start-PostInstallApps
+    # Launch post-install apps
+    Start-PostInstallApps
 
-# Setup environments
-Connect-GH
-Copy-Repos
-Install-PWAs
+    # Web authentication (after packages so Chrome is available)
+    Connect-GitHubWeb
 
-# Install extensions and configure themes
-Initialize-Editors
+    # Setup environments
+    Connect-GH
+    Copy-Repos
 
-# Register MCP servers for Copilot CLI
-Register-MCPServers
+    # PWA setup is intentionally disabled until the booth workflow needs it again.
+    # See README for the rationale and re-enable notes.
+    # Install-PWAs
 
-# Create demo loader script
-New-DemoLoader
+    # Install extensions and configure themes
+    Initialize-Editors
 
-# Print summary and finish
-Write-Summary
-if ($script:failedItems.Count -gt 0) {
-    Write-Warn "Script completed with $($script:failedItems.Count) failure(s)"
-    exit 1
+    # Register MCP servers for Copilot CLI
+    Register-MCPServers
+
+    # Create demo loader script
+    New-DemoLoader
+
+    # Print summary and finish
+    Write-Summary
+    if ($script:failedItems.Count -gt 0) {
+        Write-Warn "Script completed with $($script:failedItems.Count) failure(s)"
+        exit 1
+    }
+    Write-Success "Script completed successfully"
 }
-Write-Success "Script completed successfully"
+
+if ($MyInvocation.InvocationName -ne ".") {
+    Invoke-Main
+}

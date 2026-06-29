@@ -349,16 +349,7 @@ authenticate_github_web() {
 
 # Assists user in setting up Progressive Web Apps (PWAs)
 install_pwas() {
-    log_info "Opening required websites in Chrome..."
-
-    for i in "${!pwa_urls[@]}"; do
-        open -a "Google Chrome" "${pwa_urls[$i]}"
-        log_info "Please manually add ${pwa_names[$i]} (${pwa_urls[$i]}) as a PWA by:"
-        log_info "1. Click the three-dot menu in Chrome"
-        log_info "2. Select 'Install page as app...'"
-        log_info "Press Enter when done..."
-        read -r
-    done
+    log_info "PWA setup is currently disabled. See README for details."
 }
 
 # Sets the VS Code theme for a given editor
@@ -456,6 +447,7 @@ register_mcp_servers() {
 create_demo_loader() {
     log_info "Creating demo loader script..."
     local demo_script="$HOME/Desktop/load-demos.sh"
+    mkdir -p "$(dirname "$demo_script")"
 
     # Create the script header
     cat > "$demo_script" << 'EOF'
@@ -485,39 +477,48 @@ EOF
 # Main Execution
 # ----------------------------------------
 
-# Bootstrap: install homebrew and jq before loading config
-install_homebrew
-install_jq
-load_config
+main() {
+    # Bootstrap: install homebrew and jq before loading config
+    install_homebrew
+    install_jq
+    load_config
 
-# Install packages
-install_packages
-configure_vlc
+    # Install packages
+    install_packages
+    configure_vlc
 
-# Launch post-install apps (e.g., Docker)
-launch_post_install_apps
+    # Launch post-install apps (e.g., Docker)
+    launch_post_install_apps
 
-# Web authentication (after packages so Chrome is available)
-authenticate_github_web
+    # Web authentication (after packages so Chrome is available)
+    authenticate_github_web
 
-# Setup environments
-authenticate_gh
-clone_repos
-install_pwas
+    # Setup environments
+    authenticate_gh
+    clone_repos
 
-# Install extensions and configure themes
-configure_editors
+    # PWA setup is intentionally disabled until the booth workflow needs it again.
+    # See README for the rationale and re-enable notes.
+    # install_pwas
 
-# Register MCP servers for Copilot CLI
-register_mcp_servers
+    # Install extensions and configure themes
+    configure_editors
 
-# Create demo loader script
-create_demo_loader
+    # Register MCP servers for Copilot CLI
+    register_mcp_servers
 
-# Print summary and finish
-print_summary
-if [[ ${#FAILED_ITEMS[@]} -gt 0 ]]; then
-    log_warn "Script completed with ${#FAILED_ITEMS[@]} failure(s)"
-    exit 1
+    # Create demo loader script
+    create_demo_loader
+
+    # Print summary and finish
+    print_summary
+    if [[ ${#failed_items[@]} -gt 0 ]]; then
+        log_warn "Script completed with ${#failed_items[@]} failure(s)"
+        exit 1
+    fi
+    log_success "Script completed successfully"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
 fi
-log_success "Script completed successfully"
