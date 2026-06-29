@@ -1,8 +1,8 @@
 $script:repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-. (Join-Path $script:repoRoot 'setup.ps1')
 
 Describe 'setup.ps1' {
     BeforeAll {
+        . (Join-Path (Get-Location) 'setup.ps1')
         $script:config = Get-Content -Raw -Path (Join-Path (Get-Location) 'config.json') | ConvertFrom-Json
     }
 
