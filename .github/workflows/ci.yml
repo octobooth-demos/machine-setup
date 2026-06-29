@@ -56,6 +56,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Trust aws Homebrew tap
+        run: brew trust aws/tap
       - name: Install test dependencies
         run: brew install bats-core jq
       - name: Run Bats
