@@ -1,9 +1,9 @@
-$repoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-. (Join-Path $repoRoot 'setup.ps1')
+$script:repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+. (Join-Path $script:repoRoot 'setup.ps1')
 
 Describe 'setup.ps1' {
     BeforeAll {
-        $script:config = Get-Content -Raw -Path (Join-Path $repoRoot 'config.json') | ConvertFrom-Json
+        $script:config = Get-Content -Raw -Path (Join-Path $script:repoRoot 'config.json') | ConvertFrom-Json
     }
 
     BeforeEach {

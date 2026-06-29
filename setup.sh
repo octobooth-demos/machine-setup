@@ -21,7 +21,9 @@ readonly WARN="⚠️"
 readonly INFO="ℹ️"
 readonly ERROR="❌"
 
-readonly CONFIG_FILE="$(cd "$(dirname "$0")" && pwd)/config.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+readonly CONFIG_FILE="$SCRIPT_DIR/config.json"
 
 # When true, skip detection is bypassed and everything is reinstalled
 FORCE_REINSTALL="${FORCE_REINSTALL:-false}"
@@ -110,8 +112,10 @@ load_config() {
         exit 1
     fi
 
-    readonly VSCODE_THEME=$(jq -r '.shared.vscode_theme' "$CONFIG_FILE")
-    readonly VLC_SETTINGS=$(jq -r '.shared.vlc_settings' "$CONFIG_FILE")
+    VSCODE_THEME=$(jq -r '.shared.vscode_theme' "$CONFIG_FILE")
+    readonly VSCODE_THEME
+    VLC_SETTINGS=$(jq -r '.shared.vlc_settings' "$CONFIG_FILE")
+    readonly VLC_SETTINGS
 
     # Use read loop instead of mapfile for macOS bash 3.2 compatibility
     vs_code_extensions=()
