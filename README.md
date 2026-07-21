@@ -40,7 +40,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 
 ### Windows
 
-1. Open PowerShell as an administrator.
+1. Open Windows Terminal as an administrator.
 2. Navigate to the repository directory.
 3. Run the setup script:
 
