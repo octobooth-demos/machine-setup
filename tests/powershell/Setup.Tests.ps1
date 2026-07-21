@@ -4,16 +4,26 @@ Describe 'setup.ps1' {
     BeforeAll {
         . (Join-Path (Get-Location) 'setup.ps1')
         $script:config = Get-Content -Raw -Path (Join-Path (Get-Location) 'config.json') | ConvertFrom-Json
+
+        # Silence the script's console logging so passing tests stay clean.
+        # Assertions run against state ($failedItems, files), not console output.
+        Mock Write-Info { }
+        Mock Write-Success { }
+        Mock Write-Warn { }
+        Mock Write-Err { }
+        Mock Write-Host { }
     }
 
     BeforeEach {
         $script:failedItems = @()
         Remove-Item Function:\gh -ErrorAction SilentlyContinue
+        Remove-Item Function:\winget -ErrorAction SilentlyContinue
         Remove-Item Env:\SETUP_SCRIPT_DESKTOP_PATH -ErrorAction SilentlyContinue
     }
 
     AfterEach {
         Remove-Item Function:\gh -ErrorAction SilentlyContinue
+        Remove-Item Function:\winget -ErrorAction SilentlyContinue
         Remove-Item Env:\SETUP_SCRIPT_DESKTOP_PATH -ErrorAction SilentlyContinue
     }
 
@@ -75,11 +85,81 @@ Describe 'setup.ps1' {
         $script:failedItems | Should -Contain 'example failure'
     }
 
-    It 'Get-ChromePath falls back to command lookup when Chrome is not in Program Files' {
-        Mock Test-Path { $false } -ParameterFilter { $Path -like '*chrome.exe' }
-        Mock Get-Command { [PSCustomObject]@{ Source = 'C:\Tools\chrome.exe' } } -ParameterFilter { $Name -eq 'chrome' }
+    It 'Install-WingetPackage treats "already installed" exit code as success' {
+        function global:winget { $global:LASTEXITCODE = -1978335135 }
 
-        Get-ChromePath | Should -Be 'C:\Tools\chrome.exe'
+        Install-WingetPackage -PackageId 'Example.Package'
+
+        $script:failedItems | Should -Not -Contain 'winget: Example.Package'
+        Remove-Item Function:\winget -ErrorAction SilentlyContinue
+    }
+
+    It 'Install-WingetPackage treats reboot-required exit code as success' {
+        function global:winget { $global:LASTEXITCODE = 3010 }
+
+        Install-WingetPackage -PackageId 'Example.Package'
+
+        $script:failedItems | Should -Not -Contain 'winget: Example.Package'
+        Remove-Item Function:\winget -ErrorAction SilentlyContinue
+    }
+
+    It 'Install-WingetPackage records genuine winget failures' {
+        function global:winget { $global:LASTEXITCODE = -1978335231 }
+
+        Install-WingetPackage -PackageId 'Example.Package'
+
+        $script:failedItems | Should -Contain 'winget: Example.Package'
+        Remove-Item Function:\winget -ErrorAction SilentlyContinue
+    }
+
+    It 'Install-GHExtension treats an already-installed extension as success' {
+        function global:gh {
+            Write-Output 'there is already an installed extension that provides the "example" command'
+            $global:LASTEXITCODE = 1
+        }
+
+        Install-GHExtension -Extension 'github/gh-example'
+
+        $script:failedItems | Should -Not -Contain 'gh extension: github/gh-example'
+        Remove-Item Function:\gh -ErrorAction SilentlyContinue
+    }
+
+    It 'Install-GHExtension skips extensions unsupported on the current architecture' {
+        function global:gh {
+            Write-Output 'gh-example unsupported for windows-arm64.'
+            $global:LASTEXITCODE = 1
+        }
+
+        Install-GHExtension -Extension 'github/gh-example'
+
+        $script:failedItems | Should -Not -Contain 'gh extension: github/gh-example'
+        Remove-Item Function:\gh -ErrorAction SilentlyContinue
+    }
+
+    It 'Install-GHExtension records genuine extension failures' {
+        function global:gh {
+            Write-Output 'HTTP 404: Not Found'
+            $global:LASTEXITCODE = 1
+        }
+
+        Install-GHExtension -Extension 'github/gh-missing'
+
+        $script:failedItems | Should -Contain 'gh extension: github/gh-missing'
+        Remove-Item Function:\gh -ErrorAction SilentlyContinue
+    }
+
+    It 'Get-EdgePath falls back to command lookup when Edge is not in Program Files' {
+        Mock Test-Path { $false } -ParameterFilter { $Path -like '*msedge.exe' }
+        Mock Get-Command { [PSCustomObject]@{ Source = 'C:\Tools\msedge.exe' } } -ParameterFilter { $Name -eq 'msedge' }
+
+        Get-EdgePath | Should -Be 'C:\Tools\msedge.exe'
+    }
+
+    It 'Get-EdgePath returns the full path when a single Program Files match exists' {
+        $expected = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'
+        Mock Test-Path { $Path -eq $expected } -ParameterFilter { $Path -like '*msedge.exe' }
+
+        Get-EdgePath | Should -Be $expected
     }
 
     It 'Copy-Repos skips repositories that already exist' {

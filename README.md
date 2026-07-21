@@ -48,7 +48,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
    .\setup.ps1
    ```
 
-4. The script pauses so you can sign in to GitHub.com in Chrome with the booth/demo account.
+4. The script pauses so you can sign in to GitHub.com in Microsoft Edge with the booth/demo account.
 5. A launcher script is created on the Desktop.
 6. Store booth videos in `C:\Users\<YourUsername>\Videos` so the launcher opens them in VLC.
 
