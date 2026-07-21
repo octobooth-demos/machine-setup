@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Sets up a Windows machine based on the needs for demoing at a booth.
 
@@ -26,6 +26,17 @@
 $script:configPath = Join-Path $PSScriptRoot "config.json"
 $script:failedItems = @()
 $script:ForceReinstall = $env:FORCE_REINSTALL -eq "true"
+
+# winget (and the installers it invokes) return non-zero exit codes for
+# conditions that are not actual failures. Treat these as success so the
+# script doesn't report false failures.
+$script:WingetSuccessExitCodes = @(
+    0,           # Success
+    -1978335189, # 0x8A15002B APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE (already up to date)
+    -1978335135, # 0x8A150061 APPINSTALLER_CLI_ERROR_PACKAGE_ALREADY_INSTALLED
+    3010,        # ERROR_SUCCESS_REBOOT_REQUIRED (installer succeeded, reboot needed)
+    1641         # ERROR_SUCCESS_REBOOT_INITIATED
+)
 
 function Test-ShouldSkipInstalled { return -not $script:ForceReinstall }
 
@@ -111,22 +122,34 @@ function Import-Config {
 # ----------------------------------------
 
 # Note: winget install is idempotent — no need to pre-check installed packages.
-# Chrome is an exception: it may be pre-installed outside winget (e.g., by MDM
-# or OEM image), so winget wouldn't detect it and would fail on conflict.
+function Install-WingetPackage {
+    param([string]$PackageId)
+
+    $description = "winget: $PackageId"
+    try {
+        $output = winget install --id $PackageId -e --accept-source-agreements --accept-package-agreements --silent 2>&1
+        $exitCode = $LASTEXITCODE
+
+        if ($script:WingetSuccessExitCodes -contains $exitCode) {
+            Write-Success "Installed: $PackageId"
+        }
+        else {
+            $script:failedItems += $description
+            Write-Err "Failed: $description (exit code: $exitCode)"
+            if ($output) { Write-Host ($output | Out-String).TrimEnd() }
+        }
+    }
+    catch {
+        $script:failedItems += $description
+        Write-Err "Failed: $description - $_"
+    }
+}
+
 function Install-Packages {
     Write-Info "Installing packages via winget..."
 
     foreach ($package in $config.windows.packages) {
-        # Chrome may be installed outside of winget (MDM, OEM, manual download, etc.)
-        # so we check the filesystem to avoid install conflicts
-        if ((Test-ShouldSkipInstalled) -and $package -eq "Google.Chrome" -and (Test-Path "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe")) {
-            Write-Success "Already installed: $package (found in Program Files)"
-            continue
-        }
-
-        Invoke-SafeInstall -Description "winget: $package" -Action {
-            winget install --id $package -e --accept-source-agreements --accept-package-agreements --silent 2>&1
-        }
+        Install-WingetPackage -PackageId $package
     }
 
     # Refresh PATH so newly installed tools are available
@@ -204,6 +227,38 @@ function Install-EditorExtensions {
     }
 }
 
+function Install-GHExtension {
+    param([string]$Extension)
+
+    $description = "gh extension: $Extension"
+    try {
+        $output = gh extension install $Extension 2>&1
+        $exitCode = $LASTEXITCODE
+        $text = ($output | Out-String)
+
+        if ($exitCode -eq 0) {
+            Write-Success "Installed: $Extension (gh extension)"
+        }
+        elseif ($text -match 'already installed' -or $text -match 'already exists' -or $text -match 'there is already an installed extension') {
+            Write-Success "Already installed: $Extension (gh extension)"
+        }
+        elseif ($text -match 'unsupported for') {
+            # Precompiled extensions may not ship a binary for every architecture
+            # (e.g. windows-arm64). This isn't fixable here, so skip rather than fail.
+            Write-Warn "Skipped: $Extension (gh extension) - not supported on this architecture"
+        }
+        else {
+            $script:failedItems += $description
+            Write-Err "Failed: $description (exit code: $exitCode)"
+            if ($text.Trim()) { Write-Host $text.TrimEnd() }
+        }
+    }
+    catch {
+        $script:failedItems += $description
+        Write-Err "Failed: $description - $_"
+    }
+}
+
 function Install-GHExtensions {
     $ghExists = Get-Command gh -ErrorAction SilentlyContinue
     if ($null -eq $ghExists) {
@@ -227,9 +282,7 @@ function Install-GHExtensions {
             continue
         }
 
-        Invoke-SafeInstall -Description "gh extension: $ext" -Action {
-            gh extension install $ext 2>&1
-        }
+        Install-GHExtension -Extension $ext
     }
 }
 
@@ -304,35 +357,52 @@ function Connect-GH {
     }
 }
 
-function Get-ChromePath {
+function Get-EdgePath {
     $candidatePaths = @(
-        (Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"),
-        (Join-Path ${env:ProgramFiles(x86)} "Google\Chrome\Application\chrome.exe")
-    ) | Where-Object { $_ -and (Test-Path $_) }
+        @(
+            (Join-Path ${env:ProgramFiles(x86)} "Microsoft\Edge\Application\msedge.exe"),
+            (Join-Path $env:ProgramFiles "Microsoft\Edge\Application\msedge.exe")
+        ) | Where-Object { $_ -and (Test-Path $_) }
+    )
 
     if ($candidatePaths.Count -gt 0) {
         return $candidatePaths[0]
     }
 
-    $chromeCommand = Get-Command chrome -ErrorAction SilentlyContinue
-    if ($null -ne $chromeCommand) {
-        return $chromeCommand.Source
+    $edgeCommand = Get-Command msedge -ErrorAction SilentlyContinue
+    if ($null -ne $edgeCommand) {
+        return $edgeCommand.Source
     }
 
     return $null
 }
 
 function Connect-GitHubWeb {
-    Write-Info "Opening GitHub.com in Chrome..."
-    $chromePath = Get-ChromePath
+    Write-Info "Opening GitHub.com in Microsoft Edge..."
+    $edgePath = Get-EdgePath
 
-    if ($null -ne $chromePath) {
-        Start-Process -FilePath $chromePath -ArgumentList "https://github.com"
-    } else {
-        Write-Warn "Google Chrome was not found. Please open https://github.com manually."
+    $opened = $false
+    if ($null -ne $edgePath) {
+        try {
+            Start-Process -FilePath $edgePath -ArgumentList "https://github.com"
+            $opened = $true
+        }
+        catch {
+            Write-Warn "Could not launch Microsoft Edge ($edgePath): $_"
+        }
     }
 
-    Write-Info "Please log in to GitHub.com in Chrome with the demo account"
+    if (-not $opened) {
+        Write-Warn "Falling back to the default browser."
+        try {
+            Start-Process "https://github.com"
+        }
+        catch {
+            Write-Warn "Could not open a browser automatically. Please open https://github.com manually."
+        }
+    }
+
+    Write-Info "Please log in to GitHub.com in your browser with the demo account"
     [void](Read-Host "Press Enter once you have logged in")
     Write-Success "GitHub web authentication confirmed"
 }
@@ -488,7 +558,7 @@ function Invoke-Main {
     # Launch post-install apps
     Start-PostInstallApps
 
-    # Web authentication (after packages so Chrome is available)
+    # Web authentication (Edge is preinstalled on Windows)
     Connect-GitHubWeb
 
     # Setup environments
