@@ -37,6 +37,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 3. The script pauses so you can sign in to GitHub.com in Chrome with the booth/demo account.
 4. A launcher script is created on the Desktop.
 5. Store booth videos in `$HOME/Videos` so the launcher opens them in VLC.
+6. Set Chrome as the default browser manually: open **Chrome → Settings → Default browser → Make default**, then click **Use "Chrome"** in the macOS confirmation dialog.
 
 ### Windows
 
