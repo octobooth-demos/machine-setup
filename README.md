@@ -25,13 +25,19 @@ This repository contains setup scripts for configuring booth machines. The scrip
 
 ## Setup Instructions
 
+### Download the setup scripts
+
+1. [Download the setup scripts as a ZIP](https://github.com/octobooth-demos/machine-setup/archive/refs/heads/main.zip). No Git installation is required.
+2. Extract the ZIP file (on Windows, right-click it and choose **Extract All**).
+3. Follow the instructions for your operating system below, running commands from the extracted `machine-setup-main` folder. Keep all files together; the scripts require `config.json`.
+
 ### macOS
 
-1. Open a terminal and navigate to the repository directory.
+1. Open a terminal and navigate to the extracted `machine-setup-main` folder.
 2. Run the setup script:
 
    ```bash
-   ./setup.sh
+   bash setup.sh
    ```
 
 3. The script pauses so you can sign in to GitHub.com in Chrome with the booth/demo account.
@@ -41,7 +47,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 ### Windows
 
 1. Open Windows Terminal as an administrator.
-2. Navigate to the repository directory.
+2. Navigate to the extracted `machine-setup-main` folder.
 3. Run the setup script:
 
    ```powershell
