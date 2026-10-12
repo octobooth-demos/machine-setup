@@ -163,6 +163,12 @@ reset_packages() {
 
     log_info "Uninstalling Brew casks..."
     for cask in "${brew_casks[@]}"; do
+        # Chrome is often installed outside brew (MDM, manual), so it is kept
+        if [[ "$cask" == "google-chrome" ]]; then
+            log_info "Keeping: $cask"
+            continue
+        fi
+
         if brew list --cask "$cask" &> /dev/null; then
             try_run "brew cask: $cask" brew uninstall --zap --cask "$cask"
         else

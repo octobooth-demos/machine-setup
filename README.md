@@ -74,7 +74,7 @@ bash reset.sh --yes  # skip the confirmation prompt
 It will:
 
 - Remove the GitHub CLI extensions and run `gh auth logout`.
-- Run `brew uninstall --zap --cask` for each cask and `brew uninstall` for each formula.
+- Run `brew uninstall --zap --cask` for each cask (except `google-chrome`, which is kept) and `brew uninstall` for each formula.
 - Delete VS Code / VS Code Insiders user data (`~/Library/Application Support/Code*`, `~/.vscode*`), `~/.copilot` and `~/.nvm`, and the nvm block added to `~/.zshrc`.
 - Delete the cloned repos in `~/repos`, the Desktop `load-demos.sh` launcher and the VLC config.
 
