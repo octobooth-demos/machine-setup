@@ -339,6 +339,30 @@ authenticate_gh() {
     fi
 }
 
+# Makes the configured browser (Chrome) the default on macOS.
+# macOS always shows a confirmation dialog, so the user must click "Use Chrome".
+configure_default_browser() {
+    local app bundle_id
+    app=$(jq -r '.mac.default_browser.app // empty' "$CONFIG_FILE")
+    bundle_id=$(jq -r '.mac.default_browser.bundle_id // empty' "$CONFIG_FILE")
+    if [[ -z "$app" || -z "$bundle_id" ]]; then
+        return
+    fi
+
+    local handlers
+    handlers=$(defaults read com.apple.LaunchServices/com.apple.launchservices.secure LSHandlers 2>/dev/null || true)
+    if should_skip_installed && echo "$handlers" | grep -B1 -A1 -i 'LSHandlerURLScheme = https' | grep -qi "LSHandlerRoleAll = \"$bundle_id\""; then
+        log_success "$app is already the default browser"
+        return
+    fi
+
+    log_info "Setting $app as the default browser..."
+    log_info "Click \"Use $app\" in the macOS dialog that appears"
+    if ! open -a "$app" --args --make-default-browser; then
+        log_warn "Could not set $app as the default browser. Please set it in System Settings > Desktop & Dock."
+    fi
+}
+
 # Guides user through GitHub web authentication process using Chrome
 authenticate_github_web() {
     log_info "Opening GitHub.com in Chrome..."
@@ -521,6 +545,9 @@ main() {
 
     # Launch post-install apps (e.g., Docker)
     launch_post_install_apps
+
+    # Make Chrome the default browser (after packages so Chrome is available)
+    configure_default_browser
 
     # Web authentication (after packages so Chrome is available)
     authenticate_github_web

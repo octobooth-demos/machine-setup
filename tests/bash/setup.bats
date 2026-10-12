@@ -232,3 +232,49 @@ STUB
     run bash "$REPO_ROOT/reset.sh" --bogus
     [ "$status" -eq 2 ]
 }
+
+@test "configure_default_browser asks Chrome to become the default browser" {
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    printf '#!/bin/bash\necho "$*" >> "$OPEN_LOG"\n' > "$BATS_TEST_TMPDIR/bin/open"
+    printf '#!/bin/bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/defaults"
+    chmod +x "$BATS_TEST_TMPDIR/bin/open" "$BATS_TEST_TMPDIR/bin/defaults"
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export OPEN_LOG="$BATS_TEST_TMPDIR/open.log"
+
+    load_script
+    load_config
+
+    configure_default_browser
+
+    run cat "$OPEN_LOG"
+    [ "$output" = "-a Google Chrome --args --make-default-browser" ]
+}
+
+@test "configure_default_browser skips when Chrome is already the default" {
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    printf '#!/bin/bash\necho "$*" >> "$OPEN_LOG"\n' > "$BATS_TEST_TMPDIR/bin/open"
+    cat > "$BATS_TEST_TMPDIR/bin/defaults" <<'STUB'
+#!/bin/bash
+cat <<'OUT'
+(
+        {
+        LSHandlerPreferredVersions = {
+            LSHandlerRoleAll = "-";
+        };
+        LSHandlerRoleAll = "com.google.chrome";
+        LSHandlerURLScheme = https;
+    }
+)
+OUT
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/open" "$BATS_TEST_TMPDIR/bin/defaults"
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export OPEN_LOG="$BATS_TEST_TMPDIR/open.log"
+
+    load_script
+    load_config
+
+    configure_default_browser
+
+    [[ ! -f "$OPEN_LOG" ]]
+}

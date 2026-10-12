@@ -87,6 +87,10 @@
         "settings_dir": "Code - Insiders"
       }
     ],
+    "default_browser": {
+      "app": "Google Chrome",
+      "bundle_id": "com.google.chrome"
+    },
     "copilot_app": {
       "name": "GitHub Copilot",
       "app": "GitHub Copilot"

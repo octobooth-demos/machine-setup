@@ -9,6 +9,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Installs and configures Visual Studio Code and Visual Studio Code Insiders.
 - Installs GitHub CLI and a suite of GitHub CLI extensions.
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
+- Makes Google Chrome the default browser on macOS (macOS shows a confirmation dialog you must accept).
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
 - Installs the GitHub Copilot app (Homebrew cask `github-copilot-app` / winget `GitHub.CopilotApp`), opens it, and pauses so you can sign in.
@@ -20,7 +21,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 `config.json` is the single source of truth for both setup scripts.
 
 - `shared`: settings used by both platforms, including VS Code extensions, GitHub CLI extensions, demo sites, VLC settings, MCP servers, and repos to clone.
-- `mac`: Homebrew packages, editor binaries, the Copilot app name (`copilot_app`), and post-install apps for `setup.sh`.
+- `mac`: Homebrew packages, editor binaries, the default browser (`default_browser`), the Copilot app name (`copilot_app`), and post-install apps for `setup.sh`.
 - `windows`: `winget` packages, editor commands, the Copilot app Start menu name (`copilot_app`), and post-install apps for `setup.ps1`.
 
 `pwa_sites` currently remains in the schema for future use, but PWA setup is intentionally disabled in both scripts until the booth workflow needs it again.
