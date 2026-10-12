@@ -203,8 +203,8 @@ STUB
     [ "$status" -eq 0 ]
     run grep -F 'brew uninstall --zap --cask github' "$CMD_LOG"
     [ "$status" -eq 0 ]
-    run grep -F 'google-chrome' "$CMD_LOG"
-    [ "$status" -ne 0 ]
+    run grep -F 'brew uninstall --zap --cask google-chrome' "$CMD_LOG"
+    [ "$status" -eq 0 ]
     run grep -Fx 'brew uninstall nvm' "$CMD_LOG"
     [ "$status" -eq 0 ]
     run grep -F 'gh extension remove advanced-security/gh-sbom' "$CMD_LOG"
