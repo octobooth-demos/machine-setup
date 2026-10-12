@@ -108,23 +108,63 @@ EOF
     [ "$output" = "GitHub Copilot" ]
 }
 
-@test "authenticate_copilot_app opens the app and waits for sign-in" {
+@test "signin_step opens the surface and waits for confirmation" {
+    load_script
+
+    run signin_step 1 3 "Example" "hint" echo launched <<< $'\n\n'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"launched"* ]]
+    [[ "$output" == *"Example - confirmed"* ]]
+}
+
+@test "signin_step lets the user skip without launching" {
+    load_script
+
+    run signin_step 1 3 "Example" "hint" echo launched <<< "s"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"launched"* ]]
+    [[ "$output" == *"Skipped: Example"* ]]
+}
+
+@test "signin_step falls back to manual instructions when launch fails" {
+    load_script
+
+    run signin_step 1 3 "Example" "hint" false <<< $'\n\n'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Could not open Example automatically"* ]]
+}
+
+@test "launch_copilot_app_signin opens the configured app" {
     mkdir -p "$BATS_TEST_TMPDIR/bin"
-    cat > "$BATS_TEST_TMPDIR/bin/open" <<'STUB'
-#!/bin/bash
-echo "$*" >> "$OPEN_LOG"
-STUB
+    printf '#!/bin/bash\necho "$*" >> "$OPEN_LOG"\n' > "$BATS_TEST_TMPDIR/bin/open"
     chmod +x "$BATS_TEST_TMPDIR/bin/open"
     export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
     export OPEN_LOG="$BATS_TEST_TMPDIR/open.log"
 
     load_script
-    load_config
 
-    authenticate_copilot_app <<< ""
+    launch_copilot_app_signin
 
     run cat "$OPEN_LOG"
     [ "$output" = "-a GitHub Copilot" ]
+}
+
+@test "start_signin_checklist is skipped when SKIP_SIGNIN=true" {
+    load_script
+    load_config
+
+    SKIP_SIGNIN=true run start_signin_checklist
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Skipping sign-in checklist"* ]]
+}
+
+@test "start_signin_checklist is skipped in non-interactive sessions" {
+    load_script
+    load_config
+
+    run start_signin_checklist < /dev/null
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Non-interactive session detected"* ]]
 }
 
 @test "create_demo_loader opens the Copilot app" {

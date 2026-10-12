@@ -363,35 +363,129 @@ configure_default_browser() {
     fi
 }
 
-# Guides user through GitHub web authentication process using Chrome
-authenticate_github_web() {
-    log_info "Opening GitHub.com in Chrome..."
-    open -a "Google Chrome" https://github.com
+# Runs one step of the sign-in checklist. The user can skip any step.
+# $1 = index, $2 = total, $3 = surface name, $4 = manual hint,
+# remaining args = command that opens the surface (empty = manual only)
+signin_step() {
+    local index="$1" total="$2" name="$3" hint="$4"
+    shift 4
 
-    log_info "Please log in to GitHub.com in Chrome with the demo account"
-    log_info "Press Enter once you have logged in..."
-    read -r
+    echo ""
+    echo -e "${BLUE}[$index/$total] $name${NC}"
+    [[ -n "$hint" ]] && log_info "$hint"
 
-    log_success "GitHub web authentication confirmed"
-}
-
-# Opens the Copilot app and pauses so the user can sign in
-authenticate_copilot_app() {
-    local app_name
-    app_name=$(jq -r '.mac.copilot_app.app // empty' "$CONFIG_FILE")
-    if [[ -z "$app_name" ]]; then
+    local answer=""
+    echo -n "Press Enter to open $name, or type 's' to skip: "
+    read -r answer
+    if [[ "$answer" == "s" || "$answer" == "S" ]]; then
+        log_info "Skipped: $name"
         return
     fi
 
-    log_info "Opening $app_name app..."
-    if open -a "$app_name"; then
-        log_info "Please sign in to the $app_name app with the demo account"
-        log_info "Press Enter once you have signed in..."
-        read -r
-        log_success "$app_name app sign-in confirmed"
-    else
-        log_warn "Could not open $app_name. Please open it and sign in manually."
+    if [[ $# -gt 0 ]] && ! "$@"; then
+        log_warn "Could not open $name automatically. Please open it and sign in manually."
     fi
+
+    log_info "Press Enter once you have signed in to $name..."
+    read -r
+    log_success "$name - confirmed"
+}
+
+# Launch helpers for the checklist (non-zero return falls back to the manual hint)
+launch_browser_signin() {
+    local app
+    app=$(jq -r '.mac.default_browser.app // empty' "$CONFIG_FILE")
+    if [[ -n "$app" ]]; then
+        open -a "$app" "https://github.com/login"
+    else
+        open "https://github.com/login"
+    fi
+}
+
+launch_copilot_cli_signin() {
+    command -v copilot &> /dev/null || return 1
+    osascript -e 'tell application "Terminal" to activate' \
+              -e 'tell application "Terminal" to do script "copilot"' &> /dev/null
+}
+
+# $1 = index of the editor in .mac.editors
+launch_editor_signin() {
+    local binary
+    binary=$(jq -r ".mac.editors[$1].binary" "$CONFIG_FILE")
+    "$binary" --version &> /dev/null || return 1
+    "$binary" --command "github.copilot.signIn" &> /dev/null
+}
+
+launch_copilot_app_signin() {
+    local app
+    app=$(jq -r '.mac.copilot_app.app // empty' "$CONFIG_FILE")
+    [[ -n "$app" ]] || return 1
+    open -a "$app"
+}
+
+# Walks the user through signing in to every GitHub surface, one at a time.
+# Set SKIP_SIGNIN=true to skip; it is also skipped in non-interactive shells.
+start_signin_checklist() {
+    if [[ "${SKIP_SIGNIN:-false}" == "true" ]]; then
+        log_info "Skipping sign-in checklist (SKIP_SIGNIN=true)"
+        return
+    fi
+
+    if [[ ! -t 0 || ! -t 1 ]]; then
+        log_info "Non-interactive session detected; skipping sign-in checklist"
+        return
+    fi
+
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}GitHub sign-in checklist${NC}"
+    echo -e "${BLUE}Sign in to each surface one at a time, using the demo account.${NC}"
+    echo -e "${BLUE}The browser comes first because other surfaces inherit that session.${NC}"
+    echo -e "${BLUE}========================================${NC}"
+
+    if [[ -n "${DEMO_GH_USER:-}" ]]; then
+        log_info "Expected demo account: $DEMO_GH_USER"
+    fi
+
+    local names=() hints=() launchers=()
+
+    names+=("Web browser (github.com)")
+    hints+=("Sign in to https://github.com/login as the demo account.")
+    launchers+=("launch_browser_signin")
+
+    if ! command -v gh &> /dev/null || ! gh auth status &> /dev/null; then
+        names+=("GitHub CLI (gh)")
+        hints+=("Complete the device flow in the browser.")
+        launchers+=("gh auth login --web")
+    fi
+
+    names+=("Copilot CLI (copilot)")
+    hints+=("In the Terminal window that opens, run the /login slash command.")
+    launchers+=("launch_copilot_cli_signin")
+
+    local editor_count i
+    editor_count=$(jq '.mac.editors | length' "$CONFIG_FILE")
+    for ((i = 0; i < editor_count; i++)); do
+        names+=("$(jq -r ".mac.editors[$i].name" "$CONFIG_FILE")")
+        hints+=("If Copilot doesn't prompt you, sign in via the Accounts menu (bottom-left).")
+        launchers+=("launch_editor_signin $i")
+    done
+
+    if [[ -n "$(jq -r '.mac.copilot_app.app // empty' "$CONFIG_FILE")" ]]; then
+        names+=("GitHub Copilot app")
+        hints+=("Sign in inside the app.")
+        launchers+=("launch_copilot_app_signin")
+    fi
+
+    local total=${#names[@]}
+    for ((i = 0; i < total; i++)); do
+        local launcher_parts=()
+        read -ra launcher_parts <<< "${launchers[$i]}"
+        signin_step "$((i + 1))" "$total" "${names[$i]}" "${hints[$i]}" "${launcher_parts[@]}"
+    done
+
+    echo ""
+    log_success "Sign-in checklist complete"
 }
 
 # Assists user in setting up Progressive Web Apps (PWAs)
@@ -549,9 +643,6 @@ main() {
     # Make Chrome the default browser (after packages so Chrome is available)
     configure_default_browser
 
-    # Web authentication (after packages so Chrome is available)
-    authenticate_github_web
-
     # Setup environments
     authenticate_gh
     clone_repos
@@ -566,8 +657,8 @@ main() {
     # Register MCP servers for Copilot CLI and the Copilot app (shared ~/.copilot config)
     register_mcp_servers
 
-    # Sign in to the Copilot app (after MCP servers so it starts with them)
-    authenticate_copilot_app
+    # Sign in to every surface (after MCP servers so the apps start with them)
+    start_signin_checklist
 
     # Create demo loader script
     create_demo_loader

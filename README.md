@@ -12,7 +12,8 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Makes Google Chrome the default browser on macOS (macOS shows a confirmation dialog you must accept).
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
-- Installs the GitHub Copilot app (Homebrew cask `github-copilot-app` / winget `GitHub.CopilotApp`), opens it, and pauses so you can sign in.
+- Installs the GitHub Copilot app (Homebrew cask `github-copilot-app` / winget `GitHub.CopilotApp`).
+- On macOS, runs an interactive sign-in checklist (see below).
 - Registers shared MCP servers for Copilot CLI and the Copilot app (both read `~/.copilot/mcp-config.json`).
 - Includes `reset.sh` (macOS) to undo the setup so you can start from a clean state.
 
@@ -43,10 +44,21 @@ This repository contains setup scripts for configuring booth machines. The scrip
    bash setup.sh
    ```
 
-3. The script pauses so you can sign in to GitHub.com in Chrome with the booth/demo account.
-4. Near the end, the GitHub Copilot app opens and the script pauses so you can sign in with the same account.
-5. A launcher script is created on the Desktop.
-6. Store booth videos in `$HOME/Videos` so the launcher opens them in VLC.
+3. Near the end, the sign-in checklist walks you through each GitHub surface (see below).
+4. A launcher script is created on the Desktop.
+5. Store booth videos in `$HOME/Videos` so the launcher opens them in VLC.
+
+#### Sign-in checklist (macOS)
+
+Sign in to each surface one at a time, with the booth/demo account. For each step, press Enter to open it, or type `s` to skip it:
+
+1. Web browser (github.com, in the configured default browser)
+2. GitHub CLI (`gh auth login --web`; only shown if you aren't already logged in)
+3. Copilot CLI (opens Terminal; run `/login`)
+4. Each editor in `mac.editors` (VS Code, VS Code Insiders)
+5. GitHub Copilot app
+
+Set `DEMO_GH_USER` to display the expected account name. Set `SKIP_SIGNIN=true` to skip the checklist; it is also skipped automatically in non-interactive shells.
 
 ### Windows
 
