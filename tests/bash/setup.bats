@@ -69,6 +69,28 @@ load_script() {
 
     run grep -F 'open -a VLC "$HOME/Videos"' "$demo_script"
     [ "$status" -eq 0 ]
+
+    run grep -F 'open -a GitHub\ Copilot' "$demo_script"
+    [ "$status" -eq 0 ]
+}
+
+@test "authenticate_copilot_app opens the configured app and pauses for sign-in" {
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    cat > "$BATS_TEST_TMPDIR/bin/open" <<'EOF'
+#!/bin/bash
+echo "$*" >> "$OPEN_LOG"
+EOF
+    chmod +x "$BATS_TEST_TMPDIR/bin/open"
+    export OPEN_LOG="$BATS_TEST_TMPDIR/open.log"
+
+    load_script
+    load_config
+    run authenticate_copilot_app <<< ""
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$OPEN_LOG")" = '-a GitHub Copilot' ]
+    [[ "$output" == *"sign-in confirmed"* ]]
 }
 
 @test "try_install records failures without exiting" {

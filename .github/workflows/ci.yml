@@ -31,10 +31,14 @@ jobs:
             (.shared.mcp_servers | type == "array") and
             (.shared.repos_to_clone | type == "array") and
             (.mac.packages.casks | type == "array") and
+            (.mac.copilot_app.name | type == "string") and
+            (.mac.packages.casks | index("github-copilot-app") != null) and
             (.mac.packages.formulas | type == "array") and
             (.mac.editors | type == "array") and
             (.mac.post_install_launch | type == "array") and
             (.windows.packages | type == "array") and
+            (.windows.copilot_app.name | type == "string") and
+            (.windows.packages | index("GitHub.CopilotApp") != null) and
             (.windows.editors | type == "array") and
             (.windows.post_install_launch | type == "array")
           ' config.json > /dev/null
@@ -48,8 +52,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes shellcheck
       - name: Lint setup.sh
         run: shellcheck --severity=warning setup.sh
+      - name: Lint reset.sh
+        run: shellcheck --severity=warning reset.sh
       - name: Parse setup.sh
         run: bash -n setup.sh
+      - name: Parse reset.sh
+        run: bash -n reset.sh
 
   test-bash:
     name: Test bash

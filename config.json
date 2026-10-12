@@ -57,12 +57,16 @@
     ]
   },
   "mac": {
+    "copilot_app": {
+      "name": "GitHub Copilot"
+    },
     "packages": {
       "casks": [
         "visual-studio-code",
         "visual-studio-code@insiders",
         "vlc",
         "copilot-cli",
+        "github-copilot-app",
         "google-chrome",
         "github"
       ],
@@ -89,6 +93,9 @@
     "post_install_launch": []
   },
   "windows": {
+    "copilot_app": {
+      "name": "GitHub Copilot"
+    },
     "packages": [
       "Microsoft.VisualStudioCode",
       "Microsoft.VisualStudioCode.Insiders",
@@ -96,6 +103,7 @@
       "GitHub.cli",
       "OpenJS.NodeJS.LTS",
       "VideoLAN.VLC",
+      "GitHub.CopilotApp",
       "GitHub.Copilot",
       "GitHub.GitHubDesktop"
     ],
