@@ -77,7 +77,9 @@ print_summary() {
 install_homebrew() {
     if ! command -v brew &> /dev/null; then
         log_info "Installing Homebrew..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        # NONINTERACTIVE=1 skips the "Press RETURN to continue" prompt so the
+        # installer runs unattended.
+        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
 
     # Add brew to PATH for this session (needed on Apple Silicon and fresh installs)
@@ -281,16 +283,23 @@ clone_repos() {
 }
 
 # Installs VS Code extensions for a given editor
-# $1 = display name, $2 = binary path
+# $1 = display name, $2 = binary path, $3 = command name
 install_vscode_extensions() {
     local name="$1"
     local binary="$2"
+    local command_name="$3"
 
     log_info "Installing $name extensions..."
 
+    # Prefer the configured absolute path; fall back to the CLI command on PATH
+    # (brew casks add a shim, e.g. code-insiders) if the path isn't valid.
     if ! "$binary" --version &> /dev/null; then
-        log_error "Error: $name binary not found"
-        return 1
+        if command -v "$command_name" &> /dev/null; then
+            binary="$command_name"
+        else
+            log_warn "$name not found (skipping extensions). Is it installed?"
+            return 1
+        fi
     fi
 
     local installed_exts=""
@@ -382,12 +391,13 @@ configure_editors() {
     editor_count=$(jq '.mac.editors | length' "$CONFIG_FILE")
 
     for i in $(seq 0 $((editor_count - 1))); do
-        local editor_name editor_binary editor_settings_dir
+        local editor_name editor_binary editor_command editor_settings_dir
         editor_name=$(jq -r ".mac.editors[$i].name" "$CONFIG_FILE")
         editor_binary=$(jq -r ".mac.editors[$i].binary" "$CONFIG_FILE")
+        editor_command=$(jq -r ".mac.editors[$i].command" "$CONFIG_FILE")
         editor_settings_dir=$(jq -r ".mac.editors[$i].settings_dir" "$CONFIG_FILE")
 
-        install_vscode_extensions "$editor_name" "$editor_binary"
+        install_vscode_extensions "$editor_name" "$editor_binary" "$editor_command"
         configure_vscode_theme "$editor_name" "$editor_settings_dir"
     done
 }
@@ -482,6 +492,9 @@ EOF
 # ----------------------------------------
 
 main() {
+    # Run brew unattended: skip confirmation prompts across all brew commands.
+    export NONINTERACTIVE=1
+
     # Bootstrap: install homebrew and jq before loading config
     install_homebrew
     install_jq
