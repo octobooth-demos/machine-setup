@@ -351,6 +351,25 @@ authenticate_github_web() {
     log_success "GitHub web authentication confirmed"
 }
 
+# Opens the Copilot app and pauses so the user can sign in
+authenticate_copilot_app() {
+    local app_name
+    app_name=$(jq -r '.mac.copilot_app.app // empty' "$CONFIG_FILE")
+    if [[ -z "$app_name" ]]; then
+        return
+    fi
+
+    log_info "Opening $app_name app..."
+    if open -a "$app_name"; then
+        log_info "Please sign in to the $app_name app with the demo account"
+        log_info "Press Enter once you have signed in..."
+        read -r
+        log_success "$app_name app sign-in confirmed"
+    else
+        log_warn "Could not open $app_name. Please open it and sign in manually."
+    fi
+}
+
 # Assists user in setting up Progressive Web Apps (PWAs)
 install_pwas() {
     log_info "PWA setup is currently disabled. See README for details."
@@ -397,7 +416,7 @@ register_mcp_servers() {
     local copilot_home="${COPILOT_HOME:-$HOME/.copilot}"
     local mcp_config="$copilot_home/mcp-config.json"
 
-    log_info "Registering MCP servers for Copilot CLI..."
+    log_info "Registering MCP servers for Copilot CLI and the Copilot app..."
 
     # Create config directory if needed
     mkdir -p "$copilot_home"
@@ -468,6 +487,15 @@ EOF
 # Open VS Code and VS Code Insiders
 open -a "Visual Studio Code"
 open -a "Visual Studio Code - Insiders"
+EOF
+
+    local copilot_app
+    copilot_app=$(jq -r '.mac.copilot_app.app // empty' "$CONFIG_FILE")
+    if [[ -n "$copilot_app" ]]; then
+        printf '\n# Open the Copilot app\nopen -a "%s"\n' "$copilot_app" >> "$demo_script"
+    fi
+
+    cat >> "$demo_script" << 'EOF'
 
 # Open VLC pointing to Videos folder
 open -a VLC "$HOME/Videos"
@@ -508,8 +536,11 @@ main() {
     # Install extensions and configure themes
     configure_editors
 
-    # Register MCP servers for Copilot CLI
+    # Register MCP servers for Copilot CLI and the Copilot app (shared ~/.copilot config)
     register_mcp_servers
+
+    # Sign in to the Copilot app (after MCP servers so it starts with them)
+    authenticate_copilot_app
 
     # Create demo loader script
     create_demo_loader

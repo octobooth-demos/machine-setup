@@ -182,4 +182,41 @@ Describe 'setup.ps1' {
 
         Test-Path $ghLog | Should -BeFalse
     }
+
+    It 'config.json includes the Copilot app package and Start menu name' {
+        $script:config.windows.packages | Should -Contain 'GitHub.CopilotApp'
+        $script:config.windows.copilot_app.start_app_name | Should -Be 'GitHub Copilot'
+    }
+
+    It 'Connect-CopilotApp opens the app and waits for sign-in' {
+        $script:config = Get-Content -Raw -Path (Join-Path (Get-Location) 'config.json') | ConvertFrom-Json
+        Mock Get-StartApps { [PSCustomObject]@{ Name = 'GitHub Copilot'; AppID = 'GitHub.Copilot_abc!App' } }
+        Mock Start-Process { }
+        Mock Read-Host { '' }
+
+        Connect-CopilotApp
+
+        Should -Invoke Start-Process -Times 1 -ParameterFilter { $FilePath -eq 'shell:AppsFolder\GitHub.Copilot_abc!App' }
+        Should -Invoke Read-Host -Times 1
+    }
+
+    It 'Connect-CopilotApp does not prompt when the app is not installed' {
+        Mock Get-StartApps { $null }
+        Mock Start-Process { }
+        Mock Read-Host { '' }
+
+        Connect-CopilotApp
+
+        Should -Invoke Start-Process -Times 0
+        Should -Invoke Read-Host -Times 0
+    }
+
+    It 'New-DemoLoader opens the Copilot app' {
+        $env:SETUP_SCRIPT_DESKTOP_PATH = Join-Path $TestDrive 'Desktop2'
+
+        New-DemoLoader
+
+        $content = Get-Content -Raw -Path (Join-Path $env:SETUP_SCRIPT_DESKTOP_PATH 'load-demos.ps1')
+        $content | Should -Match "Get-StartApps -Name 'GitHub Copilot'"
+    }
 }

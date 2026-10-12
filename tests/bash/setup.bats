@@ -99,3 +99,132 @@ EOF
 
     [[ ! -f "$GH_LOG" ]]
 }
+
+@test "config.json includes the Copilot app cask and app name" {
+    run jq -r '.mac.packages.casks | index("github-copilot-app") != null' "$REPO_ROOT/config.json"
+    [ "$output" = "true" ]
+
+    run jq -r '.mac.copilot_app.app' "$REPO_ROOT/config.json"
+    [ "$output" = "GitHub Copilot" ]
+}
+
+@test "authenticate_copilot_app opens the app and waits for sign-in" {
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    cat > "$BATS_TEST_TMPDIR/bin/open" <<'STUB'
+#!/bin/bash
+echo "$*" >> "$OPEN_LOG"
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/open"
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export OPEN_LOG="$BATS_TEST_TMPDIR/open.log"
+
+    load_script
+    load_config
+
+    authenticate_copilot_app <<< ""
+
+    run cat "$OPEN_LOG"
+    [ "$output" = "-a GitHub Copilot" ]
+}
+
+@test "create_demo_loader opens the Copilot app" {
+    load_script
+    load_config
+
+    create_demo_loader
+
+    run grep -F 'open -a "GitHub Copilot"' "$HOME/Desktop/load-demos.sh"
+    [ "$status" -eq 0 ]
+}
+
+# ---- reset.sh ----
+
+reset_stubs() {
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    cat > "$BATS_TEST_TMPDIR/bin/brew" <<'STUB'
+#!/bin/bash
+echo "brew $*" >> "$CMD_LOG"
+if [[ "$1" == "list" ]]; then exit 0; fi
+STUB
+    cat > "$BATS_TEST_TMPDIR/bin/gh" <<'STUB'
+#!/bin/bash
+echo "gh $*" >> "$CMD_LOG"
+if [[ "$1 $2" == "extension list" ]]; then printf 'gh sbom\tadvanced-security/gh-sbom\tv1\n'; fi
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/brew" "$BATS_TEST_TMPDIR/bin/gh"
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export CMD_LOG="$BATS_TEST_TMPDIR/cmd.log"
+}
+
+@test "reset.sh aborts without confirmation and changes nothing" {
+    reset_stubs
+    mkdir -p "$HOME/.nvm"
+
+    run bash "$REPO_ROOT/reset.sh" <<< "no"
+    [ "$status" -eq 0 ]
+    [[ -d "$HOME/.nvm" ]]
+    [[ ! -f "$CMD_LOG" ]]
+}
+
+@test "reset.sh --yes removes user data, repos, launcher and VLC config" {
+    reset_stubs
+    mkdir -p "$HOME/.nvm" "$HOME/.vscode" "$HOME/.vscode-insiders" \
+        "$HOME/Library/Application Support/Code - Insiders" \
+        "$HOME/repos/tailspin-toys" "$HOME/repos/unrelated" \
+        "$HOME/Library/Preferences/org.videolan.vlc"
+    touch "$HOME/Desktop/load-demos.sh" "$HOME/Library/Preferences/org.videolan.vlc/vlcrc"
+    printf 'export PATH=x\n# nvm (Node Version Manager)\nexport NVM_DIR="$HOME/.nvm"\n[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \\. "/opt/homebrew/opt/nvm/nvm.sh"\n' > "$HOME/.zshrc"
+
+    run bash "$REPO_ROOT/reset.sh" --yes
+    [ "$status" -eq 0 ]
+
+    [[ ! -e "$HOME/.nvm" ]]
+    [[ ! -e "$HOME/.copilot" ]]
+    [[ ! -e "$HOME/.vscode" ]]
+    [[ ! -e "$HOME/.vscode-insiders" ]]
+    [[ ! -e "$HOME/Library/Application Support/Code" ]]
+    [[ ! -e "$HOME/Library/Application Support/Code - Insiders" ]]
+    [[ ! -e "$HOME/repos/tailspin-toys" ]]
+    [[ -d "$HOME/repos/unrelated" ]]
+    [[ ! -e "$HOME/Desktop/load-demos.sh" ]]
+    [[ ! -e "$HOME/Library/Preferences/org.videolan.vlc/vlcrc" ]]
+
+    run cat "$HOME/.zshrc"
+    [ "$output" = "export PATH=x" ]
+}
+
+@test "reset.sh --yes uninstalls casks with zap, formulas, gh extensions and logs out" {
+    reset_stubs
+
+    run bash "$REPO_ROOT/reset.sh" --yes
+    [ "$status" -eq 0 ]
+
+    run grep -F 'brew uninstall --zap --cask github-copilot-app' "$CMD_LOG"
+    [ "$status" -eq 0 ]
+    run grep -Fx 'brew uninstall nvm' "$CMD_LOG"
+    [ "$status" -eq 0 ]
+    run grep -F 'gh extension remove advanced-security/gh-sbom' "$CMD_LOG"
+    [ "$status" -eq 0 ]
+    run grep -F 'gh auth logout' "$CMD_LOG"
+    [ "$status" -eq 0 ]
+}
+
+@test "reset.sh is idempotent when nothing is installed" {
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    printf '#!/bin/bash\necho "brew $*" >> "$CMD_LOG"\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/brew"
+    printf '#!/bin/bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/gh"
+    chmod +x "$BATS_TEST_TMPDIR/bin/brew" "$BATS_TEST_TMPDIR/bin/gh"
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export CMD_LOG="$BATS_TEST_TMPDIR/cmd.log"
+
+    run bash "$REPO_ROOT/reset.sh" --yes
+    [ "$status" -eq 0 ]
+
+    run grep -F 'uninstall' "$CMD_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "reset.sh rejects unknown options" {
+    run bash "$REPO_ROOT/reset.sh" --bogus
+    [ "$status" -eq 2 ]
+}

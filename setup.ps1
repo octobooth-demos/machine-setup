@@ -407,6 +407,33 @@ function Connect-GitHubWeb {
     Write-Success "GitHub web authentication confirmed"
 }
 
+function Connect-CopilotApp {
+    $appConfig = $config.windows.copilot_app
+    if ($null -eq $appConfig) {
+        return
+    }
+
+    Write-Info "Opening $($appConfig.name) app..."
+    $startApp = Get-StartApps -Name $appConfig.start_app_name -ErrorAction SilentlyContinue | Select-Object -First 1
+
+    if ($null -eq $startApp) {
+        Write-Warn "Could not find the $($appConfig.name) app. Please open it and sign in manually."
+        return
+    }
+
+    try {
+        Start-Process "shell:AppsFolder\$($startApp.AppID)"
+    }
+    catch {
+        Write-Warn "Could not open $($appConfig.name): $_"
+        return
+    }
+
+    Write-Info "Please sign in to the $($appConfig.name) app with the demo account"
+    [void](Read-Host "Press Enter once you have signed in")
+    Write-Success "$($appConfig.name) app sign-in confirmed"
+}
+
 function Copy-Repos {
     $reposDir = Join-Path $env:USERPROFILE "repos"
 
@@ -436,7 +463,7 @@ function Copy-Repos {
 }
 
 function Register-MCPServers {
-    Write-Info "Registering MCP servers for Copilot CLI..."
+    Write-Info "Registering MCP servers for Copilot CLI and the Copilot app..."
 
     $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $env:USERPROFILE ".copilot" }
     $mcpConfigPath = Join-Path $copilotHome "mcp-config.json"
@@ -524,6 +551,14 @@ function New-DemoLoader {
     }
     $lines += ""
 
+    # Add the Copilot app
+    if ($null -ne $config.windows.copilot_app) {
+        $lines += "# Open the Copilot app"
+        $lines += "`$copilotApp = Get-StartApps -Name '$($config.windows.copilot_app.start_app_name)' | Select-Object -First 1"
+        $lines += "if (`$copilotApp) { Start-Process `"shell:AppsFolder\`$(`$copilotApp.AppID)`" }"
+        $lines += ""
+    }
+
     # Add VLC
     $lines += "# Open VLC"
     $lines += 'Start-Process "vlc" -ArgumentList "$env:USERPROFILE\Videos"'
@@ -572,8 +607,11 @@ function Invoke-Main {
     # Install extensions and configure themes
     Initialize-Editors
 
-    # Register MCP servers for Copilot CLI
+    # Register MCP servers for Copilot CLI and the Copilot app (shared .copilot config)
     Register-MCPServers
+
+    # Sign in to the Copilot app (after MCP servers so it starts with them)
+    Connect-CopilotApp
 
     # Create demo loader script
     New-DemoLoader
