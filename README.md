@@ -2,24 +2,28 @@
 
 ![CI](https://github.com/octobooth-demos/machine-setup/actions/workflows/ci.yml/badge.svg)
 
-This repository contains setup scripts for configuring booth machines. The scripts install and configure Visual Studio Code, Visual Studio Code Insiders, GitHub CLI, VLC media player, Node.js, and related tooling from a shared `config.json`.
+This repository contains setup scripts for configuring booth machines. The scripts install and configure Visual Studio Code, Visual Studio Code Insiders, the GitHub Copilot app, GitHub CLI, VLC media player, Node.js, and related tooling from a shared `config.json`.
 
 ## Features
 
 - Installs and configures Visual Studio Code and Visual Studio Code Insiders.
 - Installs GitHub CLI and a suite of GitHub CLI extensions.
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
+- Makes Google Chrome the default browser on macOS (macOS shows a confirmation dialog you must accept).
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
-- Registers shared MCP servers for Copilot CLI.
+- Installs the GitHub Copilot app (Homebrew cask `github-copilot-app` / winget `GitHub.CopilotApp`).
+- On macOS, runs an interactive sign-in checklist (see below).
+- Registers shared MCP servers for Copilot CLI and the Copilot app (both read `~/.copilot/mcp-config.json`).
+- Includes `reset.sh` (macOS) to undo the setup so you can start from a clean state.
 
 ## Configuration
 
 `config.json` is the single source of truth for both setup scripts.
 
 - `shared`: settings used by both platforms, including VS Code extensions, GitHub CLI extensions, demo sites, VLC settings, MCP servers, and repos to clone.
-- `mac`: Homebrew packages, editor binaries, and post-install apps for `setup.sh`.
-- `windows`: `winget` packages, editor commands, and post-install apps for `setup.ps1`.
+- `mac`: Homebrew packages, editor binaries, the default browser (`default_browser`), the Copilot app name (`copilot_app`), and post-install apps for `setup.sh`.
+- `windows`: `winget` packages, editor commands, the Copilot app Start menu name (`copilot_app`), and post-install apps for `setup.ps1`.
 
 `pwa_sites` currently remains in the schema for future use, but PWA setup is intentionally disabled in both scripts until the booth workflow needs it again.
 
@@ -40,9 +44,21 @@ This repository contains setup scripts for configuring booth machines. The scrip
    bash setup.sh
    ```
 
-3. The script pauses so you can sign in to GitHub.com in Chrome with the booth/demo account.
+3. Near the end, the sign-in checklist walks you through each GitHub surface (see below).
 4. A launcher script is created on the Desktop.
 5. Store booth videos in `$HOME/Videos` so the launcher opens them in VLC.
+
+#### Sign-in checklist (macOS)
+
+Sign in to each surface one at a time, with the booth/demo account. For each step, press Enter to open it, or type `s` to skip it:
+
+1. Web browser (github.com, in the configured default browser)
+2. GitHub CLI (`gh auth login --web`; only shown if you aren't already logged in)
+3. Copilot CLI (opens Terminal; run `/login`)
+4. Each editor in `mac.editors` (VS Code, VS Code Insiders)
+5. GitHub Copilot app
+
+Set `DEMO_GH_USER` to display the expected account name. Set `SKIP_SIGNIN=true` to skip the checklist; it is also skipped automatically in non-interactive shells.
 
 ### Windows
 
@@ -55,8 +71,27 @@ This repository contains setup scripts for configuring booth machines. The scrip
    ```
 
 4. The script pauses so you can sign in to GitHub.com in Microsoft Edge with the booth/demo account.
-5. A launcher script is created on the Desktop.
-6. Store booth videos in `C:\Users\<YourUsername>\Videos` so the launcher opens them in VLC.
+5. Near the end, the GitHub Copilot app opens and the script pauses so you can sign in with the same account.
+6. A launcher script is created on the Desktop.
+7. Store booth videos in `C:\Users\<YourUsername>\Videos` so the launcher opens them in VLC.
+
+### Resetting a macOS machine
+
+`reset.sh` reverses `setup.sh`, driven by `config.json`, so you can re-run `setup.sh` from a clean state:
+
+```bash
+bash reset.sh        # asks you to type "yes" first
+bash reset.sh --yes  # skip the confirmation prompt
+```
+
+It will:
+
+- Remove the GitHub CLI extensions and run `gh auth logout`.
+- Run `brew uninstall --zap --cask` for each cask and `brew uninstall` for each formula. Casks not installed through Homebrew (e.g. a Chrome installed by MDM) are skipped.
+- Delete VS Code / VS Code Insiders user data (`~/Library/Application Support/Code*`, `~/.vscode*`), `~/.copilot` and `~/.nvm`, and the nvm block added to `~/.zshrc`.
+- Delete the cloned repos in `~/repos`, the Desktop `load-demos.sh` launcher and the VLC config.
+
+This is destructive. It is idempotent: anything already missing is skipped.
 
 ## Development and Testing
 
@@ -67,8 +102,9 @@ The GitHub Actions workflow validates syntax, linting, configuration shape, and 
 #### Bash
 
 ```bash
-shellcheck setup.sh
+shellcheck --severity=warning setup.sh reset.sh
 bash -n setup.sh
+bash -n reset.sh
 bats tests/bash
 ```
 

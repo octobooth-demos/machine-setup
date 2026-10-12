@@ -339,16 +339,153 @@ authenticate_gh() {
     fi
 }
 
-# Guides user through GitHub web authentication process using Chrome
-authenticate_github_web() {
-    log_info "Opening GitHub.com in Chrome..."
-    open -a "Google Chrome" https://github.com
+# Makes the configured browser (Chrome) the default on macOS.
+# macOS always shows a confirmation dialog, so the user must click "Use Chrome".
+configure_default_browser() {
+    local app bundle_id
+    app=$(jq -r '.mac.default_browser.app // empty' "$CONFIG_FILE")
+    bundle_id=$(jq -r '.mac.default_browser.bundle_id // empty' "$CONFIG_FILE")
+    if [[ -z "$app" || -z "$bundle_id" ]]; then
+        return
+    fi
 
-    log_info "Please log in to GitHub.com in Chrome with the demo account"
-    log_info "Press Enter once you have logged in..."
+    local handlers
+    handlers=$(defaults read com.apple.LaunchServices/com.apple.launchservices.secure LSHandlers 2>/dev/null || true)
+    if should_skip_installed && echo "$handlers" | grep -B1 -A1 -i 'LSHandlerURLScheme = https' | grep -qi "LSHandlerRoleAll = \"$bundle_id\""; then
+        log_success "$app is already the default browser"
+        return
+    fi
+
+    log_info "Setting $app as the default browser..."
+    log_info "Click \"Use $app\" in the macOS dialog that appears"
+    if ! open -a "$app" --args --make-default-browser; then
+        log_warn "Could not set $app as the default browser. Please set it in System Settings > Desktop & Dock."
+    fi
+}
+
+# Runs one step of the sign-in checklist. The user can skip any step.
+# $1 = index, $2 = total, $3 = surface name, $4 = manual hint,
+# remaining args = command that opens the surface (empty = manual only)
+signin_step() {
+    local index="$1" total="$2" name="$3" hint="$4"
+    shift 4
+
+    echo ""
+    echo -e "${BLUE}[$index/$total] $name${NC}"
+    [[ -n "$hint" ]] && log_info "$hint"
+
+    local answer=""
+    echo -n "Press Enter to open $name, or type 's' to skip: "
+    read -r answer
+    if [[ "$answer" == "s" || "$answer" == "S" ]]; then
+        log_info "Skipped: $name"
+        return
+    fi
+
+    if [[ $# -gt 0 ]] && ! "$@"; then
+        log_warn "Could not open $name automatically. Please open it and sign in manually."
+    fi
+
+    log_info "Press Enter once you have signed in to $name..."
     read -r
+    log_success "$name - confirmed"
+}
 
-    log_success "GitHub web authentication confirmed"
+# Launch helpers for the checklist (non-zero return falls back to the manual hint)
+launch_browser_signin() {
+    local app
+    app=$(jq -r '.mac.default_browser.app // empty' "$CONFIG_FILE")
+    if [[ -n "$app" ]]; then
+        open -a "$app" "https://github.com/login"
+    else
+        open "https://github.com/login"
+    fi
+}
+
+launch_copilot_cli_signin() {
+    command -v copilot &> /dev/null || return 1
+    osascript -e 'tell application "Terminal" to activate' \
+              -e 'tell application "Terminal" to do script "copilot"' &> /dev/null
+}
+
+# $1 = index of the editor in .mac.editors
+launch_editor_signin() {
+    local binary
+    binary=$(jq -r ".mac.editors[$1].binary" "$CONFIG_FILE")
+    "$binary" --version &> /dev/null || return 1
+    "$binary" --command "github.copilot.signIn" &> /dev/null
+}
+
+launch_copilot_app_signin() {
+    local app
+    app=$(jq -r '.mac.copilot_app.app // empty' "$CONFIG_FILE")
+    [[ -n "$app" ]] || return 1
+    open -a "$app"
+}
+
+# Walks the user through signing in to every GitHub surface, one at a time.
+# Set SKIP_SIGNIN=true to skip; it is also skipped in non-interactive shells.
+start_signin_checklist() {
+    if [[ "${SKIP_SIGNIN:-false}" == "true" ]]; then
+        log_info "Skipping sign-in checklist (SKIP_SIGNIN=true)"
+        return
+    fi
+
+    if [[ ! -t 0 || ! -t 1 ]]; then
+        log_info "Non-interactive session detected; skipping sign-in checklist"
+        return
+    fi
+
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}GitHub sign-in checklist${NC}"
+    echo -e "${BLUE}Sign in to each surface one at a time, using the demo account.${NC}"
+    echo -e "${BLUE}The browser comes first because other surfaces inherit that session.${NC}"
+    echo -e "${BLUE}========================================${NC}"
+
+    if [[ -n "${DEMO_GH_USER:-}" ]]; then
+        log_info "Expected demo account: $DEMO_GH_USER"
+    fi
+
+    local names=() hints=() launchers=()
+
+    names+=("Web browser (github.com)")
+    hints+=("Sign in to https://github.com/login as the demo account.")
+    launchers+=("launch_browser_signin")
+
+    if ! command -v gh &> /dev/null || ! gh auth status &> /dev/null; then
+        names+=("GitHub CLI (gh)")
+        hints+=("Complete the device flow in the browser.")
+        launchers+=("gh auth login --web")
+    fi
+
+    names+=("Copilot CLI (copilot)")
+    hints+=("In the Terminal window that opens, run the /login slash command.")
+    launchers+=("launch_copilot_cli_signin")
+
+    local editor_count i
+    editor_count=$(jq '.mac.editors | length' "$CONFIG_FILE")
+    for ((i = 0; i < editor_count; i++)); do
+        names+=("$(jq -r ".mac.editors[$i].name" "$CONFIG_FILE")")
+        hints+=("If Copilot doesn't prompt you, sign in via the Accounts menu (bottom-left).")
+        launchers+=("launch_editor_signin $i")
+    done
+
+    if [[ -n "$(jq -r '.mac.copilot_app.app // empty' "$CONFIG_FILE")" ]]; then
+        names+=("GitHub Copilot app")
+        hints+=("Sign in inside the app.")
+        launchers+=("launch_copilot_app_signin")
+    fi
+
+    local total=${#names[@]}
+    for ((i = 0; i < total; i++)); do
+        local launcher_parts=()
+        read -ra launcher_parts <<< "${launchers[$i]}"
+        signin_step "$((i + 1))" "$total" "${names[$i]}" "${hints[$i]}" "${launcher_parts[@]}"
+    done
+
+    echo ""
+    log_success "Sign-in checklist complete"
 }
 
 # Assists user in setting up Progressive Web Apps (PWAs)
@@ -397,7 +534,7 @@ register_mcp_servers() {
     local copilot_home="${COPILOT_HOME:-$HOME/.copilot}"
     local mcp_config="$copilot_home/mcp-config.json"
 
-    log_info "Registering MCP servers for Copilot CLI..."
+    log_info "Registering MCP servers for Copilot CLI and the Copilot app..."
 
     # Create config directory if needed
     mkdir -p "$copilot_home"
@@ -468,6 +605,15 @@ EOF
 # Open VS Code and VS Code Insiders
 open -a "Visual Studio Code"
 open -a "Visual Studio Code - Insiders"
+EOF
+
+    local copilot_app
+    copilot_app=$(jq -r '.mac.copilot_app.app // empty' "$CONFIG_FILE")
+    if [[ -n "$copilot_app" ]]; then
+        printf '\n# Open the Copilot app\nopen -a "%s"\n' "$copilot_app" >> "$demo_script"
+    fi
+
+    cat >> "$demo_script" << 'EOF'
 
 # Open VLC pointing to Videos folder
 open -a VLC "$HOME/Videos"
@@ -494,8 +640,8 @@ main() {
     # Launch post-install apps (e.g., Docker)
     launch_post_install_apps
 
-    # Web authentication (after packages so Chrome is available)
-    authenticate_github_web
+    # Make Chrome the default browser (after packages so Chrome is available)
+    configure_default_browser
 
     # Setup environments
     authenticate_gh
@@ -508,8 +654,11 @@ main() {
     # Install extensions and configure themes
     configure_editors
 
-    # Register MCP servers for Copilot CLI
+    # Register MCP servers for Copilot CLI and the Copilot app (shared ~/.copilot config)
     register_mcp_servers
+
+    # Sign in to every surface (after MCP servers so the apps start with them)
+    start_signin_checklist
 
     # Create demo loader script
     create_demo_loader

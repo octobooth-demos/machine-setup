@@ -63,6 +63,7 @@
         "visual-studio-code@insiders",
         "vlc",
         "copilot-cli",
+        "github-copilot-app",
         "google-chrome",
         "github"
       ],
@@ -86,6 +87,14 @@
         "settings_dir": "Code - Insiders"
       }
     ],
+    "default_browser": {
+      "app": "Google Chrome",
+      "bundle_id": "com.google.chrome"
+    },
+    "copilot_app": {
+      "name": "GitHub Copilot",
+      "app": "GitHub Copilot"
+    },
     "post_install_launch": []
   },
   "windows": {
@@ -97,8 +106,13 @@
       "OpenJS.NodeJS.LTS",
       "VideoLAN.VLC",
       "GitHub.Copilot",
+      "GitHub.CopilotApp",
       "GitHub.GitHubDesktop"
     ],
+    "copilot_app": {
+      "name": "GitHub Copilot",
+      "start_app_name": "GitHub Copilot"
+    },
     "editors": [
       {
         "name": "VS Code",

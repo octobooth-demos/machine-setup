@@ -34,8 +34,10 @@ jobs:
             (.mac.packages.formulas | type == "array") and
             (.mac.editors | type == "array") and
             (.mac.post_install_launch | type == "array") and
+            (.mac.copilot_app.app | type == "string") and
             (.windows.packages | type == "array") and
             (.windows.editors | type == "array") and
+            (.windows.copilot_app.start_app_name | type == "string") and
             (.windows.post_install_launch | type == "array")
           ' config.json > /dev/null
 
@@ -46,10 +48,10 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install --yes shellcheck
-      - name: Lint setup.sh
-        run: shellcheck --severity=warning setup.sh
-      - name: Parse setup.sh
-        run: bash -n setup.sh
+      - name: Lint setup.sh and reset.sh
+        run: shellcheck --severity=warning setup.sh reset.sh
+      - name: Parse setup.sh and reset.sh
+        run: bash -n setup.sh && bash -n reset.sh
 
   test-bash:
     name: Test bash
