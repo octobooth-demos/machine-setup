@@ -2,12 +2,13 @@
 
 ![CI](https://github.com/octobooth-demos/machine-setup/actions/workflows/ci.yml/badge.svg)
 
-This repository contains setup scripts for configuring booth machines. The scripts install and configure Visual Studio Code, Visual Studio Code Insiders, GitHub CLI, VLC media player, Node.js, and related tooling from a shared `config.json`.
+This repository contains setup scripts for configuring booth machines. The scripts install and configure Visual Studio Code, Visual Studio Code Insiders, GitHub Copilot, GitHub CLI, VLC media player, Node.js, and related tooling from a shared `config.json`.
 
 ## Features
 
 - Installs and configures Visual Studio Code and Visual Studio Code Insiders.
 - Installs GitHub CLI and a suite of GitHub CLI extensions.
+- Installs GitHub Copilot and pauses for sign-in on each platform.
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
@@ -18,8 +19,8 @@ This repository contains setup scripts for configuring booth machines. The scrip
 `config.json` is the single source of truth for both setup scripts.
 
 - `shared`: settings used by both platforms, including VS Code extensions, GitHub CLI extensions, demo sites, VLC settings, MCP servers, and repos to clone.
-- `mac`: Homebrew packages, editor binaries, and post-install apps for `setup.sh`.
-- `windows`: `winget` packages, editor commands, and post-install apps for `setup.ps1`.
+- `mac`: Homebrew packages, Copilot app, editor binaries, and post-install apps for `setup.sh`.
+- `windows`: `winget` packages, Copilot app, editor commands, and post-install apps for `setup.ps1`.
 
 `pwa_sites` currently remains in the schema for future use, but PWA setup is intentionally disabled in both scripts until the booth workflow needs it again.
 
@@ -40,9 +41,10 @@ This repository contains setup scripts for configuring booth machines. The scrip
    bash setup.sh
    ```
 
-3. The script pauses so you can sign in to GitHub.com in Chrome with the booth/demo account.
+3. The script pauses so you can sign in to GitHub.com in Chrome and GitHub Copilot with the booth/demo account.
 4. A launcher script is created on the Desktop.
 5. Store booth videos in `$HOME/Videos` so the launcher opens them in VLC.
+6. To remove the configured booth setup later, run `bash reset.sh` and confirm. Pass `--yes` to skip confirmation.
 
 ### Windows
 
@@ -54,7 +56,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
    .\setup.ps1
    ```
 
-4. The script pauses so you can sign in to GitHub.com in Microsoft Edge with the booth/demo account.
+4. The script pauses so you can sign in to GitHub.com in Microsoft Edge and GitHub Copilot with the booth/demo account.
 5. A launcher script is created on the Desktop.
 6. Store booth videos in `C:\Users\<YourUsername>\Videos` so the launcher opens them in VLC.
 
@@ -68,7 +70,9 @@ The GitHub Actions workflow validates syntax, linting, configuration shape, and 
 
 ```bash
 shellcheck setup.sh
+shellcheck reset.sh
 bash -n setup.sh
+bash -n reset.sh
 bats tests/bash
 ```
 

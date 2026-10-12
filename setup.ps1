@@ -407,6 +407,27 @@ function Connect-GitHubWeb {
     Write-Success "GitHub web authentication confirmed"
 }
 
+function Connect-CopilotApp {
+    $appName = $config.windows.copilot_app.name
+    Write-Info "Opening $appName..."
+
+    $app = Get-StartApps -Name $appName | Select-Object -First 1
+    if ($null -ne $app) {
+        try {
+            Start-Process -FilePath "shell:AppsFolder\$($app.AppID)"
+        }
+        catch {
+            Write-Warn "Could not open $appName"
+        }
+    } else {
+        Write-Warn "Could not find $appName in the Start menu"
+    }
+
+    Write-Info "Please sign in to $appName with the demo account"
+    [void](Read-Host "Press Enter once you have signed in")
+    Write-Success "$appName sign-in confirmed"
+}
+
 function Copy-Repos {
     $reposDir = Join-Path $env:USERPROFILE "repos"
 
@@ -524,6 +545,11 @@ function New-DemoLoader {
     }
     $lines += ""
 
+    $copilotAppName = $config.windows.copilot_app.name.Replace("'", "''")
+    $lines += "# Open GitHub Copilot"
+    $lines += "Get-StartApps -Name '$copilotAppName' | Select-Object -First 1 | ForEach-Object { Start-Process `"shell:AppsFolder\`$(`$_.AppID)`" }"
+    $lines += ""
+
     # Add VLC
     $lines += "# Open VLC"
     $lines += 'Start-Process "vlc" -ArgumentList "$env:USERPROFILE\Videos"'
@@ -560,6 +586,7 @@ function Invoke-Main {
 
     # Web authentication (Edge is preinstalled on Windows)
     Connect-GitHubWeb
+    Connect-CopilotApp
 
     # Setup environments
     Connect-GH

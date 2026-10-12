@@ -116,6 +116,8 @@ load_config() {
     readonly VSCODE_THEME
     VLC_SETTINGS=$(jq -r '.shared.vlc_settings' "$CONFIG_FILE")
     readonly VLC_SETTINGS
+    COPILOT_APP_NAME=$(jq -r '.mac.copilot_app.name' "$CONFIG_FILE")
+    readonly COPILOT_APP_NAME
 
     # Use read loop instead of mapfile for macOS bash 3.2 compatibility
     vs_code_extensions=()
@@ -351,6 +353,18 @@ authenticate_github_web() {
     log_success "GitHub web authentication confirmed"
 }
 
+# Guides user through GitHub Copilot app authentication
+authenticate_copilot_app() {
+    log_info "Opening $COPILOT_APP_NAME..."
+    open -a "$COPILOT_APP_NAME" || log_warn "Could not open $COPILOT_APP_NAME"
+
+    log_info "Please sign in to $COPILOT_APP_NAME with the demo account"
+    log_info "Press Enter once you have signed in..."
+    read -r
+
+    log_success "$COPILOT_APP_NAME sign-in confirmed"
+}
+
 # Assists user in setting up Progressive Web Apps (PWAs)
 install_pwas() {
     log_info "PWA setup is currently disabled. See README for details."
@@ -473,6 +487,9 @@ open -a "Visual Studio Code - Insiders"
 open -a VLC "$HOME/Videos"
 EOF
 
+    echo "# Open GitHub Copilot" >> "$demo_script"
+    printf 'open -a %q\n' "$COPILOT_APP_NAME" >> "$demo_script"
+
     chmod +x "$demo_script"
     log_success "Created demo loader script at $demo_script"
 }
@@ -496,6 +513,7 @@ main() {
 
     # Web authentication (after packages so Chrome is available)
     authenticate_github_web
+    authenticate_copilot_app
 
     # Setup environments
     authenticate_gh

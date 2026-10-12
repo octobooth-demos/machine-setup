@@ -76,7 +76,25 @@ Describe 'setup.ps1' {
         Test-Path $demoScript | Should -BeTrue
         $content = Get-Content -Raw -Path $demoScript
         $content | Should -Match "Start-Process 'https://github.com'"
+        $content | Should -Match "Get-StartApps -Name 'GitHub Copilot'"
         $content | Should -Match 'Start-Process "vlc" -ArgumentList "\$env:USERPROFILE\\Videos"'
+    }
+
+    It 'Connect-CopilotApp launches the configured Start menu app and pauses for sign-in' {
+        function global:Get-StartApps { }
+        Mock Get-StartApps { [PSCustomObject]@{ AppID = 'GitHub.CopilotApp_123!App' } }
+        Mock Start-Process { }
+        Mock Read-Host { '' }
+
+        Connect-CopilotApp
+
+        Should -Invoke Start-Process -ParameterFilter {
+            $FilePath -eq 'shell:AppsFolder\GitHub.CopilotApp_123!App'
+        }
+        Should -Invoke Read-Host -ParameterFilter {
+            $Prompt -eq 'Press Enter once you have signed in'
+        }
+        Remove-Item Function:\Get-StartApps -ErrorAction SilentlyContinue
     }
 
     It 'Invoke-SafeInstall records native command failures' {
