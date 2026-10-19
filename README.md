@@ -2,13 +2,14 @@
 
 ![CI](https://github.com/octobooth-demos/machine-setup/actions/workflows/ci.yml/badge.svg)
 
-This repository contains setup scripts for configuring booth machines. The scripts install and configure Visual Studio Code, Visual Studio Code Insiders, GitHub CLI, VLC media player, Node.js, and related tooling from a shared `config.json`.
+This repository contains setup scripts for configuring booth machines. The scripts install and configure Visual Studio Code, Visual Studio Code Insiders, GitHub CLI, VLC media player, Node.js, iTerm2 (macOS), and related tooling from a shared `config.json`.
 
 ## Features
 
 - Installs and configures Visual Studio Code and Visual Studio Code Insiders.
 - Installs GitHub CLI and a suite of GitHub CLI extensions.
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
+- Installs iTerm2 on macOS with the GitHub Dark Default color scheme as the default profile.
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
 - Registers shared MCP servers for Copilot CLI.
@@ -18,8 +19,10 @@ This repository contains setup scripts for configuring booth machines. The scrip
 `config.json` is the single source of truth for both setup scripts.
 
 - `shared`: settings used by both platforms, including VS Code extensions, GitHub CLI extensions, demo sites, VLC settings, MCP servers, and repos to clone.
-- `mac`: Homebrew packages, editor binaries, and post-install apps for `setup.sh`.
+- `mac`: Homebrew packages, editor binaries, iTerm2 theme settings, and post-install apps for `setup.sh`.
 - `windows`: `winget` packages, editor commands, and post-install apps for `setup.ps1`.
+
+`mac.iterm2` controls the iTerm2 theme. `setup.sh` downloads the `.itermcolors` file from `color_scheme_url` (pinned to a commit of [mbadolato/iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes)), adds it to iTerm2's Color Presets, writes a [Dynamic Profile](https://iterm2.com/documentation-dynamic-profiles.html) named `profile_name` to `~/Library/Application Support/iTerm2/DynamicProfiles/machine-setup.json`, and makes that profile the default. Restart iTerm2 if it was running during setup.
 
 `pwa_sites` currently remains in the schema for future use, but PWA setup is intentionally disabled in both scripts until the booth workflow needs it again.
 

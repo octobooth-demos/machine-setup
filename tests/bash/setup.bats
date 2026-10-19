@@ -99,3 +99,111 @@ EOF
 
     [[ ! -f "$GH_LOG" ]]
 }
+
+stub_iterm2_tools() {
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export PREFS_STORE="$BATS_TEST_TMPDIR/iterm2-prefs.plist"
+    export DEFAULTS_LOG="$BATS_TEST_TMPDIR/defaults.log"
+    export SCHEME_FIXTURE="$BATS_TEST_TMPDIR/fixture.itermcolors"
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+
+    cat > "$SCHEME_FIXTURE" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Background Color</key>
+    <dict>
+        <key>Blue Component</key><real>0.0705</real>
+        <key>Green Component</key><real>0.0549</real>
+        <key>Red Component</key><real>0.0509</real>
+    </dict>
+</dict>
+</plist>
+EOF
+
+    # curl stub: "download" the fixture to the -o path
+    cat > "$BATS_TEST_TMPDIR/bin/curl" <<'EOF'
+#!/bin/bash
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "-o" ]]; then cp "$SCHEME_FIXTURE" "$2"; exit 0; fi
+    shift
+done
+exit 1
+EOF
+
+    # defaults stub: back the preferences domain with a plain plist file
+    cat > "$BATS_TEST_TMPDIR/bin/defaults" <<'EOF'
+#!/bin/bash
+echo "$*" >> "$DEFAULTS_LOG"
+case "$1" in
+    export)
+        if [[ -f "$PREFS_STORE" ]]; then cp "$PREFS_STORE" "$3"; else plutil -create xml1 "$3"; fi ;;
+    import)
+        cp "$3" "$PREFS_STORE" ;;
+esac
+EOF
+    chmod +x "$BATS_TEST_TMPDIR/bin/curl" "$BATS_TEST_TMPDIR/bin/defaults"
+}
+
+@test "config installs iTerm2 cask" {
+    run jq -e '.mac.packages.casks | index("iterm2")' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+}
+
+@test "configure_iterm2 installs theme as preset and default dynamic profile" {
+    stub_iterm2_tools
+    load_script
+    load_config
+
+    configure_iterm2
+
+    local profile_file="$HOME/Library/Application Support/iTerm2/DynamicProfiles/machine-setup.json"
+    [[ -f "$profile_file" ]]
+
+    run jq -r '.Profiles[0].Name' "$profile_file"
+    [ "$output" = "GitHub Dark Default" ]
+
+    run jq -r '.Profiles[0].Guid' "$profile_file"
+    [ "$output" = "$ITERM2_PROFILE_GUID" ]
+
+    run jq -e '.Profiles[0]["Background Color"]["Red Component"] - 0.0509 | fabs < 0.000001' "$profile_file"
+    [ "$status" -eq 0 ]
+
+    run /usr/libexec/PlistBuddy -c "Print ':Custom Color Presets:GitHub Dark Default:Background Color:Red Component'" "$PREFS_STORE"
+    [ "$status" -eq 0 ]
+    [[ "$output" == 0.0509* ]]
+
+    run grep -Fx "write com.googlecode.iterm2 Default Bookmark Guid -string $ITERM2_PROFILE_GUID" "$DEFAULTS_LOG"
+    [ "$status" -eq 0 ]
+}
+
+@test "configure_iterm2 preserves existing presets and skips when already configured" {
+    stub_iterm2_tools
+    plutil -create xml1 "$PREFS_STORE"
+    /usr/libexec/PlistBuddy -c "Add ':Custom Color Presets' dict" -c "Add ':Custom Color Presets:Mine' dict" "$PREFS_STORE"
+
+    load_script
+    load_config
+
+    configure_iterm2
+    run /usr/libexec/PlistBuddy -c "Print ':Custom Color Presets:Mine'" "$PREFS_STORE"
+    [ "$status" -eq 0 ]
+
+    rm "$DEFAULTS_LOG"
+    configure_iterm2
+    [[ ! -f "$DEFAULTS_LOG" ]]
+}
+
+@test "configure_iterm2 fails without writing a profile when download fails" {
+    stub_iterm2_tools
+    printf '#!/bin/bash\nexit 22\n' > "$BATS_TEST_TMPDIR/bin/curl"
+
+    load_script
+    load_config
+
+    run configure_iterm2
+    [ "$status" -eq 1 ]
+    [[ ! -f "$HOME/Library/Application Support/iTerm2/DynamicProfiles/machine-setup.json" ]]
+    [[ ! -f "$DEFAULTS_LOG" ]]
+}

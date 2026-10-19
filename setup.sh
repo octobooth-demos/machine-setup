@@ -116,6 +116,12 @@ load_config() {
     readonly VSCODE_THEME
     VLC_SETTINGS=$(jq -r '.shared.vlc_settings' "$CONFIG_FILE")
     readonly VLC_SETTINGS
+    ITERM2_PROFILE_NAME=$(jq -r '.mac.iterm2.profile_name' "$CONFIG_FILE")
+    readonly ITERM2_PROFILE_NAME
+    ITERM2_PROFILE_GUID=$(jq -r '.mac.iterm2.profile_guid' "$CONFIG_FILE")
+    readonly ITERM2_PROFILE_GUID
+    ITERM2_COLOR_SCHEME_URL=$(jq -r '.mac.iterm2.color_scheme_url' "$CONFIG_FILE")
+    readonly ITERM2_COLOR_SCHEME_URL
 
     # Use read loop instead of mapfile for macOS bash 3.2 compatibility
     vs_code_extensions=()
@@ -167,6 +173,74 @@ configure_vlc() {
     } >> "$pref_file"
 
     log_success "VLC settings configured - please restart VLC"
+}
+
+# Installs the configured color scheme into iTerm2 as a Color Preset and as a
+# Dynamic Profile, then makes that profile the default for new windows
+configure_iterm2() {
+    local prefs_domain="com.googlecode.iterm2"
+    local profiles_dir="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
+    local profile_file="$profiles_dir/machine-setup.json"
+    local plist_buddy="/usr/libexec/PlistBuddy"
+    local preset_key=":Custom Color Presets:$ITERM2_PROFILE_NAME"
+
+    log_info "Configuring iTerm2 with the $ITERM2_PROFILE_NAME theme..."
+
+    if should_skip_installed && [[ -f "$profile_file" ]]; then
+        log_info "iTerm2 profile already configured, skipping..."
+        return 0
+    fi
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    local scheme_file="$tmp_dir/scheme.itermcolors"
+    local prefs_file="$tmp_dir/iterm2.plist"
+
+    if ! curl -fsSL "$ITERM2_COLOR_SCHEME_URL" -o "$scheme_file" || ! plutil -lint -s "$scheme_file"; then
+        log_error "Could not download a valid iTerm2 color scheme from $ITERM2_COLOR_SCHEME_URL"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Build the Dynamic Profile in the temp dir first: iTerm2 ignores the whole
+    # DynamicProfiles folder if any file in it is malformed
+    local colors_json
+    if ! colors_json=$(plutil -convert json -o - "$scheme_file") || \
+       ! jq --arg name "$ITERM2_PROFILE_NAME" --arg guid "$ITERM2_PROFILE_GUID" \
+            '{Profiles: [. + {Name: $name, Guid: $guid, "Dynamic Profile Parent Name": "Default"}]}' \
+            <<< "$colors_json" > "$tmp_dir/profile.json"; then
+        log_error "Could not build the iTerm2 profile"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Add the scheme to Settings > Profiles > Colors > Color Presets. The first
+    # two PlistBuddy calls may fail harmlessly (dict already exists / no preset yet).
+    local prefs_ok=false
+    if defaults export "$prefs_domain" "$prefs_file"; then
+        "$plist_buddy" -c "Add ':Custom Color Presets' dict" "$prefs_file" &> /dev/null || true
+        "$plist_buddy" -c "Delete '$preset_key'" "$prefs_file" &> /dev/null || true
+        if "$plist_buddy" -c "Add '$preset_key' dict" -c "Merge '$scheme_file' '$preset_key'" "$prefs_file" && \
+           defaults import "$prefs_domain" "$prefs_file" && \
+           defaults write "$prefs_domain" "Default Bookmark Guid" -string "$ITERM2_PROFILE_GUID"; then
+            prefs_ok=true
+        fi
+    fi
+
+    if [[ "$prefs_ok" != "true" ]]; then
+        log_error "Could not update iTerm2 preferences"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    mkdir -p "$profiles_dir"
+    mv "$tmp_dir/profile.json" "$profile_file"
+    rm -rf "$tmp_dir"
+
+    if pgrep -xq iTerm2; then
+        log_warn "iTerm2 is running - restart it to apply the new default profile"
+    fi
+    log_success "iTerm2 configured with the $ITERM2_PROFILE_NAME theme"
 }
 
 # Installs all Brew casks and formulas from config.json
@@ -490,6 +564,7 @@ main() {
     # Install packages
     install_packages
     configure_vlc
+    try_install "iTerm2 theme: $ITERM2_PROFILE_NAME" configure_iterm2
 
     # Launch post-install apps (e.g., Docker)
     launch_post_install_apps
