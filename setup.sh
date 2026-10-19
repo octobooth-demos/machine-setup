@@ -203,11 +203,13 @@ configure_iterm2() {
     fi
 
     # Build the Dynamic Profile in the temp dir first: iTerm2 ignores the whole
-    # DynamicProfiles folder if any file in it is malformed
+    # DynamicProfiles folder if any file in it is malformed. Separate light/dark
+    # colors are disabled so the scheme isn't overridden by the parent's
+    # "(Light)"/"(Dark)" colors (iTerm2 3.5+ enables them by default).
     local colors_json
     if ! colors_json=$(plutil -convert json -o - "$scheme_file") || \
        ! jq --arg name "$ITERM2_PROFILE_NAME" --arg guid "$ITERM2_PROFILE_GUID" \
-            '{Profiles: [. + {Name: $name, Guid: $guid, "Dynamic Profile Parent Name": "Default"}]}' \
+            '{Profiles: [. + {Name: $name, Guid: $guid, "Dynamic Profile Parent Name": "Default", "Use Separate Colors for Light and Dark Mode": false}]}' \
             <<< "$colors_json" > "$tmp_dir/profile.json"; then
         log_error "Could not build the iTerm2 profile"
         rm -rf "$tmp_dir"

@@ -167,6 +167,9 @@ EOF
     run jq -r '.Profiles[0].Guid' "$profile_file"
     [ "$output" = "$ITERM2_PROFILE_GUID" ]
 
+    run jq -r '.Profiles[0]["Use Separate Colors for Light and Dark Mode"]' "$profile_file"
+    [ "$output" = "false" ]
+
     run jq -e '.Profiles[0]["Background Color"]["Red Component"] - 0.0509 | fabs < 0.000001' "$profile_file"
     [ "$status" -eq 0 ]
 
