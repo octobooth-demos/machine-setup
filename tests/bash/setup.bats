@@ -253,3 +253,96 @@ red_component() {
     [ "$status" -eq 1 ]
     [[ ! -f "$PREFS_STORE" ]]
 }
+
+@test "config installs the GitHub Copilot app on both platforms" {
+    run jq -e '.mac.packages.casks | index("github-copilot-app")' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+
+    run jq -e '.windows.packages | index("GitHub.CopilotApp")' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+}
+
+@test "create_demo_loader opens the GitHub Copilot app" {
+    load_script
+    load_config
+
+    create_demo_loader
+
+    run grep -F 'open -a "GitHub Copilot"' "$HOME/Desktop/load-demos.sh"
+    [ "$status" -eq 0 ]
+}
+
+# gh stub: reports the scopes in GH_SCOPES and logs every call with the
+# GH_TOKEN/GITHUB_TOKEN values it saw
+stub_gh_auth() {
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export GH_LOG="$BATS_TEST_TMPDIR/gh.log"
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    cat > "$BATS_TEST_TMPDIR/bin/gh" <<'STUB'
+#!/bin/bash
+echo "$* [GH_TOKEN=${GH_TOKEN-unset} GITHUB_TOKEN=${GITHUB_TOKEN-unset}]" >> "$GH_LOG"
+if [[ "$1 $2" == "auth status" ]]; then
+    echo "  - Token scopes: $GH_SCOPES"
+fi
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/gh"
+}
+
+@test "ensure_gh_scopes refreshes only missing scopes using the stored login" {
+    stub_gh_auth
+    export GH_SCOPES="'codespace', 'gist', 'repo'"
+    export GH_TOKEN="env-token" GITHUB_TOKEN="env-token"
+    load_script
+    load_config
+
+    ensure_gh_scopes
+
+    run grep -F 'auth refresh -h github.com -s delete_repo [GH_TOKEN=unset GITHUB_TOKEN=unset]' "$GH_LOG"
+    [ "$status" -eq 0 ]
+
+    run grep -F 'env-token' "$GH_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "ensure_gh_scopes does nothing when all scopes are granted" {
+    stub_gh_auth
+    export GH_SCOPES="'codespace', 'delete_repo', 'repo'"
+    load_script
+    load_config
+
+    ensure_gh_scopes
+
+    run grep -F 'auth refresh' "$GH_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "install_demo_launcher skips when repo-setup-scripts has no Demo Launcher" {
+    load_script
+
+    failed_items=()
+    install_demo_launcher
+
+    [ "${#failed_items[@]}" -eq 0 ]
+    [[ ! -e "$COPILOT_HOME/extensions/demo-launcher" ]]
+}
+
+@test "install_demo_launcher runs install.sh once unless forced" {
+    local ext_dir="$HOME/repos/repo-setup-scripts/.github/extensions/demo-launcher"
+    mkdir -p "$ext_dir"
+    cat > "$ext_dir/install.sh" <<'STUB'
+#!/bin/bash
+echo run >> "$INSTALL_LOG"
+mkdir -p "$COPILOT_HOME/extensions/demo-launcher"
+touch "$COPILOT_HOME/extensions/demo-launcher/extension.mjs"
+STUB
+    export INSTALL_LOG="$BATS_TEST_TMPDIR/install.log"
+    load_script
+
+    install_demo_launcher
+    install_demo_launcher
+    [ "$(wc -l < "$INSTALL_LOG")" -eq 1 ]
+
+    FORCE_REINSTALL=true
+    install_demo_launcher
+    [ "$(wc -l < "$INSTALL_LOG")" -eq 2 ]
+}

@@ -50,6 +50,10 @@
         "url": "https://mcp.svelte.dev/mcp"
       }
     ],
+    "gh_auth_scopes": [
+      "codespace",
+      "delete_repo"
+    ],
     "repos_to_clone": [
       "octobooth-demos/repo-setup-scripts",
       "octobooth-demos/tailspin-toys",
@@ -63,6 +67,7 @@
         "visual-studio-code@insiders",
         "vlc",
         "copilot-cli",
+        "github-copilot-app",
         "google-chrome",
         "github",
         "iterm2",
@@ -104,6 +109,7 @@
       "OpenJS.NodeJS.LTS",
       "VideoLAN.VLC",
       "GitHub.Copilot",
+      "GitHub.CopilotApp",
       "GitHub.GitHubDesktop"
     ],
     "editors": [

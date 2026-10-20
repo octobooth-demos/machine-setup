@@ -29,6 +29,7 @@ jobs:
             (.shared.pwa_sites | type == "array") and
             (.shared.demo_sites | type == "array") and
             (.shared.mcp_servers | type == "array") and
+            (.shared.gh_auth_scopes | type == "array") and
             (.shared.repos_to_clone | type == "array") and
             (.mac.packages.casks | type == "array") and
             (.mac.packages.formulas | type == "array") and

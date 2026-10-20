@@ -144,6 +144,9 @@ load_config() {
 
     demo_sites=()
     while IFS= read -r line; do demo_sites+=("$line"); done < <(jq -r '.shared.demo_sites[]' "$CONFIG_FILE")
+
+    gh_auth_scopes=()
+    while IFS= read -r line; do gh_auth_scopes+=("$line"); done < <(jq -r '.shared.gh_auth_scopes // [] | .[]' "$CONFIG_FILE")
 }
 
 # ----------------------------------------
@@ -277,17 +280,27 @@ configure_iterm2() {
     log_success "iTerm2 configured with the $ITERM2_COLOR_PRESET theme and $ITERM2_FONT"
 }
 
+# Prints the app bundle for casks that are often installed outside brew
+cask_app_path() {
+    case "$1" in
+        google-chrome) echo "/Applications/Google Chrome.app" ;;
+        github-copilot-app) echo "/Applications/GitHub Copilot.app" ;;
+    esac
+}
+
 # Installs all Brew casks and formulas from config.json
 # Note: brew install is idempotent — no need to pre-check installed packages.
-# Chrome is an exception: it may be pre-installed outside brew (e.g., by MDM
-# or manual download), so brew wouldn't detect it and would fail on conflict.
+# Chrome and the GitHub Copilot app are exceptions: they may be pre-installed
+# outside brew (e.g., by MDM or manual download), so brew wouldn't detect them
+# and would fail on conflict.
 install_packages() {
     log_info "Installing Brew casks..."
 
     for cask in "${brew_casks[@]}"; do
-        # Chrome may be installed outside of brew (MDM, manual download, etc.)
-        # so we check the filesystem to avoid install conflicts
-        if should_skip_installed && [[ "$cask" == "google-chrome" ]] && [[ -d "/Applications/Google Chrome.app" ]]; then
+        # Check the filesystem for apps that may be installed outside of brew
+        local app_path
+        app_path=$(cask_app_path "$cask")
+        if should_skip_installed && [[ -n "$app_path" && -d "$app_path" ]]; then
             log_success "Already installed: $cask (found in /Applications)"
             continue
         fi
@@ -388,6 +401,26 @@ clone_repos() {
     done
 }
 
+# Makes the Demo Launcher canvas (from repo-setup-scripts) available in every
+# Copilot session; skipped until the cloned repo ships the extension
+install_demo_launcher() {
+    local installer="$HOME/repos/repo-setup-scripts/.github/extensions/demo-launcher/install.sh"
+    local loader="${COPILOT_HOME:-$HOME/.copilot}/extensions/demo-launcher/extension.mjs"
+
+    if [[ ! -f "$installer" ]]; then
+        log_info "Demo Launcher not found in repo-setup-scripts, skipping..."
+        return
+    fi
+
+    if should_skip_installed && [[ -f "$loader" ]]; then
+        log_info "Demo Launcher already installed, skipping..."
+        return
+    fi
+
+    log_info "Installing the Demo Launcher canvas for all Copilot sessions..."
+    try_install "Demo Launcher" bash "$installer"
+}
+
 # Installs VS Code extensions for a given editor
 # $1 = display name, $2 = binary path
 install_vscode_extensions() {
@@ -430,15 +463,58 @@ install_vscode_extensions() {
     done
 }
 
+# Runs gh against the stored login: GH_TOKEN/GITHUB_TOKEN would override it
+# (and make `gh auth refresh` refuse to run)
+gh_stored_auth() {
+    env -u GH_TOKEN -u GITHUB_TOKEN gh "$@"
+}
+
+# Prints each configured gh_auth_scopes entry the stored login doesn't have
+gh_missing_scopes() {
+    local granted scope
+    granted=$(gh_stored_auth auth status -h github.com 2>/dev/null | grep 'Token scopes:' || true)
+    for scope in "${gh_auth_scopes[@]}"; do
+        if [[ "$granted" != *"'$scope'"* ]]; then
+            echo "$scope"
+        fi
+    done
+}
+
+# Ensures the GitHub CLI login has the configured scopes (codespace for
+# Codespace demos, delete_repo for the Demo Launcher's cleanup)
+ensure_gh_scopes() {
+    if [[ ${#gh_auth_scopes[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    local missing
+    missing=$(gh_missing_scopes | paste -sd, -)
+    if [[ -z "$missing" ]]; then
+        log_success "GitHub CLI login has the required scopes"
+        return 0
+    fi
+
+    log_info "Adding GitHub CLI scopes: $missing..."
+    if ! gh_stored_auth auth refresh -h github.com -s "$missing"; then
+        log_warn "Could not add scopes. Run 'gh auth refresh -h github.com -s $missing' manually."
+        return 1
+    fi
+}
+
 # Ensures user is authenticated with GitHub CLI and installs extensions if authenticated
 authenticate_gh() {
     if command -v gh &> /dev/null; then
-        if ! gh auth status &> /dev/null; then
+        if ! gh_stored_auth auth status -h github.com &> /dev/null; then
             log_info "Please login to GitHub CLI first..."
-            gh auth login --web
+            local scope_args=()
+            if [[ ${#gh_auth_scopes[@]} -gt 0 ]]; then
+                scope_args=(-s "$(IFS=,; echo "${gh_auth_scopes[*]}")")
+            fi
+            gh_stored_auth auth login --web -h github.com "${scope_args[@]}"
         fi
 
-        if gh auth status &> /dev/null; then
+        if gh_stored_auth auth status -h github.com &> /dev/null; then
+            try_install "gh auth scopes: ${gh_auth_scopes[*]}" ensure_gh_scopes
             install_gh_extensions
             log_success "GitHub CLI extensions installed"
         else
@@ -573,6 +649,9 @@ EOF
 
     # Add the remaining standard content
     cat >> "$demo_script" << 'EOF'
+# Open the GitHub Copilot app
+open -a "GitHub Copilot"
+
 # Open VS Code and VS Code Insiders
 open -a "Visual Studio Code"
 open -a "Visual Studio Code - Insiders"
@@ -609,6 +688,7 @@ main() {
     # Setup environments
     authenticate_gh
     clone_repos
+    install_demo_launcher
 
     # PWA setup is intentionally disabled until the booth workflow needs it again.
     # See README for the rationale and re-enable notes.

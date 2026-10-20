@@ -182,4 +182,46 @@ Describe 'setup.ps1' {
 
         Test-Path $ghLog | Should -BeFalse
     }
+
+    It 'config installs the GitHub Copilot app' {
+        $script:config.windows.packages | Should -Contain 'GitHub.CopilotApp'
+        $script:config.shared.gh_auth_scopes | Should -Contain 'codespace'
+        $script:config.shared.gh_auth_scopes | Should -Contain 'delete_repo'
+    }
+
+    It 'Confirm-GHScope refreshes only missing scopes using the stored login' {
+        $ghLog = Join-Path $TestDrive 'gh-scope-refresh.log'
+        $env:GH_TOKEN = 'env-token'
+        function global:gh {
+            Add-Content -Path $ghLog -Value "$($args -join ' ') [GH_TOKEN=$env:GH_TOKEN]"
+            if ($args[0] -eq 'auth' -and $args[1] -eq 'status') {
+                Write-Output "  - Token scopes: 'codespace', 'gist', 'repo'"
+            }
+            $global:LASTEXITCODE = 0
+        }
+
+        try {
+            Confirm-GHScope
+            $log = Get-Content -Path $ghLog
+            $log | Should -Contain 'auth refresh -h github.com -s delete_repo [GH_TOKEN=]'
+            $env:GH_TOKEN | Should -Be 'env-token'
+            $script:failedItems | Should -BeNullOrEmpty
+        }
+        finally {
+            Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'Confirm-GHScope does nothing when all scopes are granted' {
+        $ghLog = Join-Path $TestDrive 'gh-scope-noop.log'
+        function global:gh {
+            Add-Content -Path $ghLog -Value ($args -join ' ')
+            Write-Output "  - Token scopes: 'codespace', 'delete_repo', 'repo'"
+            $global:LASTEXITCODE = 0
+        }
+
+        Confirm-GHScope
+
+        Get-Content -Path $ghLog -Raw | Should -Not -Match 'auth refresh'
+    }
 }

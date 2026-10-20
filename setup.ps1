@@ -335,6 +335,47 @@ function Initialize-Editors {
     Write-Success "Editor configuration complete"
 }
 
+# Runs gh against the stored login: GH_TOKEN/GITHUB_TOKEN would override it
+# (and make `gh auth refresh` refuse to run). Uses $args rather than a param
+# block so flags like -h and -s pass straight through to gh.
+function Invoke-GHStoredAuth {
+    $saved = @{ GH_TOKEN = $env:GH_TOKEN; GITHUB_TOKEN = $env:GITHUB_TOKEN }
+    Remove-Item Env:\GH_TOKEN, Env:\GITHUB_TOKEN -ErrorAction SilentlyContinue
+    try {
+        gh @args
+    }
+    finally {
+        foreach ($name in $saved.Keys) {
+            if ($null -ne $saved[$name]) { Set-Item -Path "Env:\$name" -Value $saved[$name] }
+        }
+    }
+}
+
+# Returns each configured gh_auth_scopes entry the stored login doesn't have
+function Get-GHMissingScope {
+    $status = (Invoke-GHStoredAuth auth status -h github.com 2>&1) | Out-String
+    $granted = ($status -split "`n" | Where-Object { $_ -match 'Token scopes:' }) -join ''
+    return @($config.shared.gh_auth_scopes | Where-Object { $_ -and $granted -notmatch [regex]::Escape("'$_'") })
+}
+
+# Ensures the GitHub CLI login has the configured scopes (codespace for
+# Codespace demos, delete_repo for the Demo Launcher's cleanup)
+function Confirm-GHScope {
+    $missing = @(Get-GHMissingScope)
+    if ($missing.Count -eq 0) {
+        Write-Success "GitHub CLI login has the required scopes"
+        return
+    }
+
+    $scopes = $missing -join ','
+    Write-Info "Adding GitHub CLI scopes: $scopes..."
+    Invoke-GHStoredAuth auth refresh -h github.com -s $scopes
+    if ($LASTEXITCODE -ne 0) {
+        $script:failedItems += "gh auth scopes: $scopes"
+        Write-Warn "Could not add scopes. Run 'gh auth refresh -h github.com -s $scopes' manually."
+    }
+}
+
 function Connect-GH {
     $ghExists = Get-Command gh -ErrorAction SilentlyContinue
     if ($null -eq $ghExists) {
@@ -342,14 +383,19 @@ function Connect-GH {
         return
     }
 
-    gh auth status 2>&1 | Out-Null
+    Invoke-GHStoredAuth auth status -h github.com 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Info "Please authenticate with GitHub..."
-        gh auth login --web
+        $scopeArgs = @()
+        if (@($config.shared.gh_auth_scopes).Count -gt 0) {
+            $scopeArgs = @('-s', ($config.shared.gh_auth_scopes -join ','))
+        }
+        Invoke-GHStoredAuth auth login --web -h github.com @scopeArgs
     }
 
-    gh auth status 2>&1 | Out-Null
+    Invoke-GHStoredAuth auth status -h github.com 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
+        Confirm-GHScope
         Install-GHExtensions
         Write-Success "GitHub CLI extensions installed"
     } else {
