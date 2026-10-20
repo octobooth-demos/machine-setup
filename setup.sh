@@ -116,12 +116,12 @@ load_config() {
     readonly VSCODE_THEME
     VLC_SETTINGS=$(jq -r '.shared.vlc_settings' "$CONFIG_FILE")
     readonly VLC_SETTINGS
-    ITERM2_PROFILE_NAME=$(jq -r '.mac.iterm2.profile_name' "$CONFIG_FILE")
-    readonly ITERM2_PROFILE_NAME
-    ITERM2_PROFILE_GUID=$(jq -r '.mac.iterm2.profile_guid' "$CONFIG_FILE")
-    readonly ITERM2_PROFILE_GUID
-    ITERM2_COLOR_SCHEME_URL=$(jq -r '.mac.iterm2.color_scheme_url' "$CONFIG_FILE")
-    readonly ITERM2_COLOR_SCHEME_URL
+    ITERM2_COLOR_PRESET=$(jq -r '.mac.iterm2.color_preset' "$CONFIG_FILE")
+    readonly ITERM2_COLOR_PRESET
+    ITERM2_COLOR_SCHEME_FILE="$SCRIPT_DIR/$(jq -r '.mac.iterm2.color_scheme_file' "$CONFIG_FILE")"
+    readonly ITERM2_COLOR_SCHEME_FILE
+    ITERM2_FONT=$(jq -r '.mac.iterm2.font' "$CONFIG_FILE")
+    readonly ITERM2_FONT
 
     # Use read loop instead of mapfile for macOS bash 3.2 compatibility
     vs_code_extensions=()
@@ -175,74 +175,106 @@ configure_vlc() {
     log_success "VLC settings configured - please restart VLC"
 }
 
-# Installs the configured color scheme into iTerm2 as a Color Preset and as a
-# Dynamic Profile, then makes that profile the default for new windows
+# Returns 0 if a font with the given PostScript name is installed
+font_installed() {
+    [[ "$(osascript -l JavaScript -e "ObjC.import('AppKit'); \$.NSFont.fontWithNameSize('$1', 12).isNil()" 2>/dev/null)" == "false" ]]
+}
+
+# Applies the configured color scheme and font to iTerm2's default profile and
+# adds the scheme to Settings > Profiles > Colors > Color Presets
 configure_iterm2() {
     local prefs_domain="com.googlecode.iterm2"
-    local profiles_dir="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
-    local profile_file="$profiles_dir/machine-setup.json"
+    local sentinel_key="MachineSetupColorPreset"
     local plist_buddy="/usr/libexec/PlistBuddy"
-    local preset_key=":Custom Color Presets:$ITERM2_PROFILE_NAME"
+    local preset_key=":Custom Color Presets:$ITERM2_COLOR_PRESET"
+    local separate_colors_key="Use Separate Colors for Light and Dark Mode"
 
-    log_info "Configuring iTerm2 with the $ITERM2_PROFILE_NAME theme..."
+    log_info "Configuring iTerm2 with the $ITERM2_COLOR_PRESET theme..."
 
-    if should_skip_installed && [[ -f "$profile_file" ]]; then
-        log_info "iTerm2 profile already configured, skipping..."
+    if should_skip_installed && [[ "$(defaults read "$prefs_domain" "$sentinel_key" 2>/dev/null)" == "$ITERM2_COLOR_PRESET" ]]; then
+        log_info "iTerm2 already configured, skipping..."
         return 0
     fi
 
+    # iTerm2 saves its in-memory profiles on quit, which would undo these changes
+    if pgrep -xq iTerm2; then
+        log_error "iTerm2 is running - quit it and re-run setup to apply the theme"
+        return 1
+    fi
+
+    if ! plutil -lint -s "$ITERM2_COLOR_SCHEME_FILE"; then
+        log_error "Invalid iTerm2 color scheme: $ITERM2_COLOR_SCHEME_FILE"
+        return 1
+    fi
+
+    local color_keys=()
+    while IFS= read -r line; do color_keys+=("$line"); done < <(plutil -convert json -o - "$ITERM2_COLOR_SCHEME_FILE" | jq -r 'keys[]')
+
     local tmp_dir
     tmp_dir=$(mktemp -d)
-    local scheme_file="$tmp_dir/scheme.itermcolors"
     local prefs_file="$tmp_dir/iterm2.plist"
 
-    if ! curl -fsSL "$ITERM2_COLOR_SCHEME_URL" -o "$scheme_file" || ! plutil -lint -s "$scheme_file"; then
-        log_error "Could not download a valid iTerm2 color scheme from $ITERM2_COLOR_SCHEME_URL"
+    if ! defaults export "$prefs_domain" "$prefs_file"; then
+        log_error "Could not read iTerm2 preferences"
         rm -rf "$tmp_dir"
         return 1
     fi
 
-    # Build the Dynamic Profile in the temp dir first: iTerm2 ignores the whole
-    # DynamicProfiles folder if any file in it is malformed. Separate light/dark
-    # colors are disabled so the scheme isn't overridden by the parent's
-    # "(Light)"/"(Dark)" colors (iTerm2 3.5+ enables them by default).
-    local colors_json
-    if ! colors_json=$(plutil -convert json -o - "$scheme_file") || \
-       ! jq --arg name "$ITERM2_PROFILE_NAME" --arg guid "$ITERM2_PROFILE_GUID" \
-            '{Profiles: [. + {Name: $name, Guid: $guid, "Dynamic Profile Parent Name": "Default", "Use Separate Colors for Light and Dark Mode": false}]}' \
-            <<< "$colors_json" > "$tmp_dir/profile.json"; then
-        log_error "Could not build the iTerm2 profile"
-        rm -rf "$tmp_dir"
-        return 1
-    fi
-
-    # Add the scheme to Settings > Profiles > Colors > Color Presets. The first
-    # two PlistBuddy calls may fail harmlessly (dict already exists / no preset yet).
-    local prefs_ok=false
-    if defaults export "$prefs_domain" "$prefs_file"; then
-        "$plist_buddy" -c "Add ':Custom Color Presets' dict" "$prefs_file" &> /dev/null || true
-        "$plist_buddy" -c "Delete '$preset_key'" "$prefs_file" &> /dev/null || true
-        if "$plist_buddy" -c "Add '$preset_key' dict" -c "Merge '$scheme_file' '$preset_key'" "$prefs_file" && \
-           defaults import "$prefs_domain" "$prefs_file" && \
-           defaults write "$prefs_domain" "Default Bookmark Guid" -string "$ITERM2_PROFILE_GUID"; then
-            prefs_ok=true
+    # Use the current default profile, else the first profile, else create one
+    # (iTerm2 only creates its own Default profile on first launch)
+    local default_guid profile_index=-1 profile_guid="" i=0 guid
+    default_guid=$("$plist_buddy" -c "Print ':Default Bookmark Guid'" "$prefs_file" 2>/dev/null || true)
+    while guid=$("$plist_buddy" -c "Print ':New Bookmarks:$i:Guid'" "$prefs_file" 2>/dev/null); do
+        if [[ $profile_index -lt 0 || "$guid" == "$default_guid" ]]; then
+            profile_index=$i
+            profile_guid="$guid"
         fi
+        i=$((i + 1))
+    done
+
+    if [[ $profile_index -lt 0 ]]; then
+        profile_index=0
+        profile_guid=$(uuidgen)
+        "$plist_buddy" -c "Add ':New Bookmarks' array" "$prefs_file" &> /dev/null || true
+        "$plist_buddy" -c "Add ':New Bookmarks:0' dict" \
+            -c "Add ':New Bookmarks:0:Name' string Default" \
+            -c "Add ':New Bookmarks:0:Guid' string $profile_guid" "$prefs_file"
     fi
 
-    if [[ "$prefs_ok" != "true" ]]; then
+    # PlistBuddy can't overwrite with Add/Merge, so clear existing values first
+    local profile=":New Bookmarks:$profile_index"
+    local key
+    for key in "${color_keys[@]}" "$separate_colors_key" "Normal Font"; do
+        "$plist_buddy" -c "Delete '$profile:$key'" "$prefs_file" &> /dev/null || true
+    done
+    for key in ":Default Bookmark Guid" ":$sentinel_key" "$preset_key"; do
+        "$plist_buddy" -c "Delete '$key'" "$prefs_file" &> /dev/null || true
+    done
+    "$plist_buddy" -c "Add ':Custom Color Presets' dict" "$prefs_file" &> /dev/null || true
+
+    # Separate light/dark colors are disabled so the scheme isn't overridden by
+    # "(Light)"/"(Dark)" colors (iTerm2 3.5+ enables them by default)
+    if ! "$plist_buddy" \
+            -c "Merge '$ITERM2_COLOR_SCHEME_FILE' '$profile'" \
+            -c "Add '$profile:$separate_colors_key' bool false" \
+            -c "Add '$profile:Normal Font' string '$ITERM2_FONT'" \
+            -c "Add ':Default Bookmark Guid' string $profile_guid" \
+            -c "Add '$preset_key' dict" \
+            -c "Merge '$ITERM2_COLOR_SCHEME_FILE' '$preset_key'" \
+            -c "Add ':$sentinel_key' string '$ITERM2_COLOR_PRESET'" \
+            "$prefs_file" || \
+       ! defaults import "$prefs_domain" "$prefs_file"; then
         log_error "Could not update iTerm2 preferences"
         rm -rf "$tmp_dir"
         return 1
     fi
 
-    mkdir -p "$profiles_dir"
-    mv "$tmp_dir/profile.json" "$profile_file"
     rm -rf "$tmp_dir"
 
-    if pgrep -xq iTerm2; then
-        log_warn "iTerm2 is running - restart it to apply the new default profile"
+    if ! font_installed "${ITERM2_FONT% *}"; then
+        log_warn "Font ${ITERM2_FONT% *} is not installed - iTerm2 will fall back to its default font"
     fi
-    log_success "iTerm2 configured with the $ITERM2_PROFILE_NAME theme"
+    log_success "iTerm2 configured with the $ITERM2_COLOR_PRESET theme and $ITERM2_FONT"
 }
 
 # Installs all Brew casks and formulas from config.json
@@ -566,7 +598,7 @@ main() {
     # Install packages
     install_packages
     configure_vlc
-    try_install "iTerm2 theme: $ITERM2_PROFILE_NAME" configure_iterm2
+    try_install "iTerm2 theme: $ITERM2_COLOR_PRESET" configure_iterm2
 
     # Launch post-install apps (e.g., Docker)
     launch_post_install_apps

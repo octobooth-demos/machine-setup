@@ -65,7 +65,8 @@
         "copilot-cli",
         "google-chrome",
         "github",
-        "iterm2"
+        "iterm2",
+        "font-sf-mono"
       ],
       "formulas": [
         "gh",
@@ -88,9 +89,9 @@
       }
     ],
     "iterm2": {
-      "profile_name": "GitHub Dark Default",
-      "profile_guid": "7D19D140-F74B-4FDA-9BA8-A0C14FDE2918",
-      "color_scheme_url": "https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/61c5479c08fc700a7866cdd18813cde19680384b/schemes/GitHub%20Dark%20Default.itermcolors"
+      "color_preset": "GitHub Dark Default",
+      "color_scheme_file": "iterm2/github-dark-default.itermcolors",
+      "font": "SFMono-Regular 12"
     },
     "post_install_launch": []
   },

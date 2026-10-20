@@ -9,7 +9,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Installs and configures Visual Studio Code and Visual Studio Code Insiders.
 - Installs GitHub CLI and a suite of GitHub CLI extensions.
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
-- Installs iTerm2 on macOS with the GitHub Dark Default color scheme as the default profile.
+- Installs iTerm2 on macOS and sets its default profile to the GitHub Dark Default color scheme with SF Mono.
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
 - Registers shared MCP servers for Copilot CLI.
@@ -22,7 +22,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - `mac`: Homebrew packages, editor binaries, iTerm2 theme settings, and post-install apps for `setup.sh`.
 - `windows`: `winget` packages, editor commands, and post-install apps for `setup.ps1`.
 
-`mac.iterm2` controls the iTerm2 theme. `setup.sh` downloads the `.itermcolors` file from `color_scheme_url` (pinned to a commit of [mbadolato/iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes)), adds it to iTerm2's Color Presets, writes a [Dynamic Profile](https://iterm2.com/documentation-dynamic-profiles.html) named `profile_name` to `~/Library/Application Support/iTerm2/DynamicProfiles/machine-setup.json`, and makes that profile the default. Restart iTerm2 if it was running during setup.
+`mac.iterm2` controls the iTerm2 theme. `setup.sh` takes the colors from `color_scheme_file` (stored in [`iterm2/`](iterm2/README.md)), adds them to iTerm2's Color Presets as `color_preset`, and applies them and `font` to iTerm2's default profile. If iTerm2 has never been opened, it creates that "Default" profile. The `font-sf-mono` cask installs SF Mono from Apple and asks for an admin password. Quit iTerm2 before running setup, because iTerm2 overwrites preference changes when it quits. Once the theme is applied, later runs leave the profile alone unless `FORCE_REINSTALL=true`.
 
 `pwa_sites` currently remains in the schema for future use, but PWA setup is intentionally disabled in both scripts until the booth workflow needs it again.
 
@@ -32,7 +32,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 
 1. [Download the setup scripts as a ZIP](https://github.com/octobooth-demos/machine-setup/archive/refs/heads/main.zip). No Git installation is required.
 2. Extract the ZIP file (on Windows, right-click it and choose **Extract All**).
-3. Follow the instructions for your operating system below, running commands from the extracted `machine-setup-main` folder. Keep all files together; the scripts require `config.json`.
+3. Follow the instructions for your operating system below, running commands from the extracted `machine-setup-main` folder. Keep all files together; the scripts require `config.json`, and `setup.sh` also needs the `iterm2/` folder.
 
 ### macOS
 

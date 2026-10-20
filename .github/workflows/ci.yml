@@ -33,9 +33,9 @@ jobs:
             (.mac.packages.casks | type == "array") and
             (.mac.packages.formulas | type == "array") and
             (.mac.editors | type == "array") and
-            (.mac.iterm2.profile_name | type == "string") and
-            (.mac.iterm2.profile_guid | type == "string") and
-            (.mac.iterm2.color_scheme_url | type == "string") and
+            (.mac.iterm2.color_preset | type == "string") and
+            (.mac.iterm2.color_scheme_file | type == "string") and
+            (.mac.iterm2.font | type == "string") and
             (.mac.post_install_launch | type == "array") and
             (.windows.packages | type == "array") and
             (.windows.editors | type == "array") and

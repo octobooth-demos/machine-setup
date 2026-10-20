@@ -104,33 +104,7 @@ stub_iterm2_tools() {
     export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
     export PREFS_STORE="$BATS_TEST_TMPDIR/iterm2-prefs.plist"
     export DEFAULTS_LOG="$BATS_TEST_TMPDIR/defaults.log"
-    export SCHEME_FIXTURE="$BATS_TEST_TMPDIR/fixture.itermcolors"
     mkdir -p "$BATS_TEST_TMPDIR/bin"
-
-    cat > "$SCHEME_FIXTURE" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Background Color</key>
-    <dict>
-        <key>Blue Component</key><real>0.0705</real>
-        <key>Green Component</key><real>0.0549</real>
-        <key>Red Component</key><real>0.0509</real>
-    </dict>
-</dict>
-</plist>
-EOF
-
-    # curl stub: "download" the fixture to the -o path
-    cat > "$BATS_TEST_TMPDIR/bin/curl" <<'EOF'
-#!/bin/bash
-while [[ $# -gt 0 ]]; do
-    if [[ "$1" == "-o" ]]; then cp "$SCHEME_FIXTURE" "$2"; exit 0; fi
-    shift
-done
-exit 1
-EOF
 
     # defaults stub: back the preferences domain with a plain plist file
     cat > "$BATS_TEST_TMPDIR/bin/defaults" <<'EOF'
@@ -141,72 +115,141 @@ case "$1" in
         if [[ -f "$PREFS_STORE" ]]; then cp "$PREFS_STORE" "$3"; else plutil -create xml1 "$3"; fi ;;
     import)
         cp "$3" "$PREFS_STORE" ;;
+    read)
+        [[ -f "$PREFS_STORE" ]] && /usr/libexec/PlistBuddy -c "Print ':$3'" "$PREFS_STORE" ;;
 esac
 EOF
-    chmod +x "$BATS_TEST_TMPDIR/bin/curl" "$BATS_TEST_TMPDIR/bin/defaults"
+    # pgrep stub: iTerm2 is not running unless ITERM2_RUNNING=true
+    cat > "$BATS_TEST_TMPDIR/bin/pgrep" <<'EOF'
+#!/bin/bash
+[[ "$ITERM2_RUNNING" == "true" ]]
+EOF
+    chmod +x "$BATS_TEST_TMPDIR/bin/defaults" "$BATS_TEST_TMPDIR/bin/pgrep"
 }
 
-@test "config installs iTerm2 cask" {
-    run jq -e '.mac.packages.casks | index("iterm2")' "$REPO_ROOT/config.json"
+prefs_value() {
+    /usr/libexec/PlistBuddy -c "Print '$1'" "$PREFS_STORE"
+}
+
+# Prints the Red Component of a profile/preset color, rounded to 4 places
+red_component() {
+    printf '%.4f' "$(prefs_value "$1:Red Component")"
+}
+
+@test "config installs iTerm2 and SF Mono casks" {
+    run jq -e '.mac.packages.casks | index("iterm2") and index("font-sf-mono")' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+
+    run plutil -lint -s "$REPO_ROOT/$(jq -r '.mac.iterm2.color_scheme_file' "$REPO_ROOT/config.json")"
     [ "$status" -eq 0 ]
 }
 
-@test "configure_iterm2 installs theme as preset and default dynamic profile" {
+@test "configure_iterm2 creates a themed Default profile on a fresh install" {
     stub_iterm2_tools
     load_script
     load_config
 
     configure_iterm2
 
-    local profile_file="$HOME/Library/Application Support/iTerm2/DynamicProfiles/machine-setup.json"
-    [[ -f "$profile_file" ]]
+    run prefs_value ":New Bookmarks:0:Name"
+    [ "$output" = "Default" ]
 
-    run jq -r '.Profiles[0].Name' "$profile_file"
-    [ "$output" = "GitHub Dark Default" ]
+    local guid
+    guid=$(prefs_value ":New Bookmarks:0:Guid")
+    run prefs_value ":Default Bookmark Guid"
+    [ "$output" = "$guid" ]
 
-    run jq -r '.Profiles[0].Guid' "$profile_file"
-    [ "$output" = "$ITERM2_PROFILE_GUID" ]
+    run red_component ":New Bookmarks:0:Background Color"
+    [ "$output" = "0.0510" ]
 
-    run jq -r '.Profiles[0]["Use Separate Colors for Light and Dark Mode"]' "$profile_file"
+    run prefs_value ":New Bookmarks:0:Use Separate Colors for Light and Dark Mode"
     [ "$output" = "false" ]
 
-    run jq -e '.Profiles[0]["Background Color"]["Red Component"] - 0.0509 | fabs < 0.000001' "$profile_file"
-    [ "$status" -eq 0 ]
+    run prefs_value ":New Bookmarks:0:Normal Font"
+    [ "$output" = "SFMono-Regular 12" ]
 
-    run /usr/libexec/PlistBuddy -c "Print ':Custom Color Presets:GitHub Dark Default:Background Color:Red Component'" "$PREFS_STORE"
-    [ "$status" -eq 0 ]
-    [[ "$output" == 0.0509* ]]
+    run red_component ":Custom Color Presets:GitHub Dark Default:Background Color"
+    [ "$output" = "0.0510" ]
+}
 
-    run grep -Fx "write com.googlecode.iterm2 Default Bookmark Guid -string $ITERM2_PROFILE_GUID" "$DEFAULTS_LOG"
+@test "configure_iterm2 applies theme to the existing default profile only" {
+    stub_iterm2_tools
+    plutil -create xml1 "$PREFS_STORE"
+    /usr/libexec/PlistBuddy \
+        -c "Add ':Default Bookmark Guid' string GUID-B" \
+        -c "Add ':New Bookmarks' array" \
+        -c "Add ':New Bookmarks:0' dict" \
+        -c "Add ':New Bookmarks:0:Name' string Other" \
+        -c "Add ':New Bookmarks:0:Guid' string GUID-A" \
+        -c "Add ':New Bookmarks:1' dict" \
+        -c "Add ':New Bookmarks:1:Name' string Default" \
+        -c "Add ':New Bookmarks:1:Guid' string GUID-B" \
+        "$PREFS_STORE"
+    # Split across calls: PlistBuddy aborts when given 15+ -c commands at once
+    /usr/libexec/PlistBuddy \
+        -c "Add ':New Bookmarks:1:Columns' integer 120" \
+        -c "Add ':New Bookmarks:1:Normal Font' string 'Monaco 12'" \
+        -c "Add ':New Bookmarks:1:Use Separate Colors for Light and Dark Mode' bool true" \
+        -c "Add ':New Bookmarks:1:Background Color' dict" \
+        -c "Add ':New Bookmarks:1:Background Color:Red Component' real 0.98" \
+        -c "Add ':Custom Color Presets' dict" \
+        -c "Add ':Custom Color Presets:Mine' dict" \
+        "$PREFS_STORE"
+
+    load_script
+    load_config
+    configure_iterm2
+
+    run red_component ":New Bookmarks:1:Background Color"
+    [ "$output" = "0.0510" ]
+
+    run prefs_value ":New Bookmarks:1:Normal Font"
+    [ "$output" = "SFMono-Regular 12" ]
+
+    run prefs_value ":New Bookmarks:1:Use Separate Colors for Light and Dark Mode"
+    [ "$output" = "false" ]
+
+    run prefs_value ":New Bookmarks:1:Columns"
+    [ "$output" = "120" ]
+
+    run prefs_value ":Default Bookmark Guid"
+    [ "$output" = "GUID-B" ]
+
+    run prefs_value ":New Bookmarks:0:Background Color"
+    [ "$status" -ne 0 ]
+
+    run prefs_value ":Custom Color Presets:Mine"
     [ "$status" -eq 0 ]
 }
 
-@test "configure_iterm2 preserves existing presets and skips when already configured" {
+@test "configure_iterm2 skips when already configured unless forced" {
     stub_iterm2_tools
-    plutil -create xml1 "$PREFS_STORE"
-    /usr/libexec/PlistBuddy -c "Add ':Custom Color Presets' dict" -c "Add ':Custom Color Presets:Mine' dict" "$PREFS_STORE"
-
     load_script
     load_config
 
     configure_iterm2
-    run /usr/libexec/PlistBuddy -c "Print ':Custom Color Presets:Mine'" "$PREFS_STORE"
-    [ "$status" -eq 0 ]
+    /usr/libexec/PlistBuddy -c "Set ':New Bookmarks:0:Normal Font' 'Menlo 14'" "$PREFS_STORE"
 
-    rm "$DEFAULTS_LOG"
     configure_iterm2
-    [[ ! -f "$DEFAULTS_LOG" ]]
+    run prefs_value ":New Bookmarks:0:Normal Font"
+    [ "$output" = "Menlo 14" ]
+
+    FORCE_REINSTALL=true
+    configure_iterm2
+    run prefs_value ":New Bookmarks:0:Normal Font"
+    [ "$output" = "SFMono-Regular 12" ]
+
+    run prefs_value ":New Bookmarks:1"
+    [ "$status" -ne 0 ]
 }
 
-@test "configure_iterm2 fails without writing a profile when download fails" {
+@test "configure_iterm2 refuses to change preferences while iTerm2 is running" {
     stub_iterm2_tools
-    printf '#!/bin/bash\nexit 22\n' > "$BATS_TEST_TMPDIR/bin/curl"
-
+    export ITERM2_RUNNING=true
     load_script
     load_config
 
     run configure_iterm2
     [ "$status" -eq 1 ]
-    [[ ! -f "$HOME/Library/Application Support/iTerm2/DynamicProfiles/machine-setup.json" ]]
-    [[ ! -f "$DEFAULTS_LOG" ]]
+    [[ ! -f "$PREFS_STORE" ]]
 }
