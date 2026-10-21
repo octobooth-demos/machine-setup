@@ -252,11 +252,11 @@ Describe 'setup.ps1' {
         }
 
         BeforeAll {
-            # Stub launcher/install-service.ps1 that logs its port and exits with
+            # Stub standalone-launcher/install-service.ps1 that logs its port and exits with
             # $ExitCode, so no real scheduled task is registered
             function New-StubServiceInstaller {
                 param([int]$ExitCode = 0)
-                $launcherDir = Join-Path $env:USERPROFILE 'repos\repo-setup-scripts\launcher'
+                $launcherDir = Join-Path $env:USERPROFILE 'repos\repo-setup-scripts\standalone-launcher'
                 New-Item -Path $launcherDir -ItemType Directory -Force | Out-Null
                 @(
                     'param([int]$Port, [switch]$Uninstall)'

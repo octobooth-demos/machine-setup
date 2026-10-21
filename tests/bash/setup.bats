@@ -409,10 +409,10 @@ STUB
     [[ "$output" == *"Usage:"* ]]
 }
 
-# Writes a stub launcher/install-service.sh that logs its arguments and exits
+# Writes a stub standalone-launcher/install-service.sh that logs its arguments and exits
 # with SERVICE_EXIT (default 0), so no real LaunchAgent is installed
 stub_service_installer() {
-    local launcher_dir="$HOME/repos/repo-setup-scripts/launcher"
+    local launcher_dir="$HOME/repos/repo-setup-scripts/standalone-launcher"
     mkdir -p "$launcher_dir"
     cat > "$launcher_dir/install-service.sh" <<'STUB'
 #!/bin/bash

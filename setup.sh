@@ -479,13 +479,13 @@ install_demo_launcher() {
     try_install "Demo Launcher" bash "$installer"
 }
 
-# Path of the standalone Demo Launcher service installer in repo-setup-scripts
+# Path of the standalone Demo Launcher fallback installer in repo-setup-scripts
 demo_launcher_service_installer() {
-    echo "$(demo_launcher_repo_dir)/launcher/install-service.sh"
+    echo "$(demo_launcher_repo_dir)/standalone-launcher/install-service.sh"
 }
 
-# Runs the standalone Demo Launcher (launcher/server.mjs) as a LaunchAgent so
-# it's always up at http://127.0.0.1:<port>/, even without the Copilot app.
+# Runs the standalone Demo Launcher fallback (standalone-launcher/server.mjs),
+# which runs alongside the canvas, as a LaunchAgent so it's always up at http://127.0.0.1:<port>/, even without the Copilot app.
 # Run after install_demo_launcher, which syncs the checkout. install-service.sh
 # is idempotent and restarts the service, so it always runs to pick up pulls.
 install_demo_launcher_service() {
@@ -503,7 +503,7 @@ install_demo_launcher_service() {
     fi
 
     local port="${DEMO_LAUNCHER_SERVICE_PORT:-4747}"
-    log_info "Installing the Demo Launcher service on port $port..."
+    log_info "Installing the Demo Launcher fallback service (alongside the canvas) on port $port..."
     try_install "Demo Launcher service" bash "$installer" --port "$port"
 }
 

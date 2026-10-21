@@ -500,8 +500,8 @@ function Sync-DemoLauncherRepo {
     $global:LASTEXITCODE = 0
 }
 
-# Runs the standalone Demo Launcher (launcher/server.mjs) as a logon scheduled
-# task so it's always up at http://127.0.0.1:<port>/, even without the Copilot
+# Runs the standalone Demo Launcher fallback (standalone-launcher/server.mjs),
+# which runs alongside the canvas, as a logon scheduled task so it's always up at http://127.0.0.1:<port>/, even without the Copilot
 # app. install-service.ps1 is idempotent and restarts the task, so it always
 # runs to pick up pulls.
 function Install-DemoLauncherService {
@@ -511,7 +511,7 @@ function Install-DemoLauncherService {
         return
     }
 
-    $installer = Join-Path (Get-DemoLauncherRepoDir) "launcher\install-service.ps1"
+    $installer = Join-Path (Get-DemoLauncherRepoDir) "standalone-launcher\install-service.ps1"
     if (-not (Test-Path $installer)) {
         Write-Warn "Demo Launcher service installer not found at $installer, skipping..."
         return
@@ -524,7 +524,7 @@ function Install-DemoLauncherService {
     # Separate process: the installer uses $ErrorActionPreference = 'Stop' and
     # leaves non-zero exit codes from probes like git rev-parse
     $powershell = (Get-Process -Id $PID).Path
-    Write-Info "Installing the Demo Launcher service on port $port..."
+    Write-Info "Installing the Demo Launcher fallback service (alongside the canvas) on port $port..."
     Invoke-SafeInstall -Description "Demo Launcher service" -Action {
         & $powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Port $port 2>&1
     }
