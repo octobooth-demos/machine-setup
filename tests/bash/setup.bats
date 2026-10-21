@@ -408,3 +408,135 @@ STUB
     [ "$status" -eq 2 ]
     [[ "$output" == *"Usage:"* ]]
 }
+
+# Writes a stub standalone-launcher/install-service.sh that logs its arguments and exits
+# with SERVICE_EXIT (default 0), so no real LaunchAgent is installed
+stub_service_installer() {
+    local launcher_dir="$HOME/repos/repo-setup-scripts/standalone-launcher"
+    mkdir -p "$launcher_dir"
+    cat > "$launcher_dir/install-service.sh" <<'STUB'
+#!/bin/bash
+echo "$*" >> "$SERVICE_LOG"
+exit "${SERVICE_EXIT:-0}"
+STUB
+    export SERVICE_LOG="$BATS_TEST_TMPDIR/service.log"
+}
+
+@test "config enables the Demo Launcher service and installs node" {
+    run jq -e '.shared.demo_launcher_service.enabled == true and .shared.demo_launcher_service.port == 4747' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+
+    run jq -e '.mac.packages.formulas | index("node")' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+}
+
+@test "install_demo_launcher_service warns and skips when repo-setup-scripts has no service installer" {
+    load_script
+    load_config
+
+    failed_items=()
+    run install_demo_launcher_service
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"service installer not found"* ]]
+
+    install_demo_launcher_service
+    [ "${#failed_items[@]}" -eq 0 ]
+}
+
+@test "install_demo_launcher_service runs install-service.sh with the configured port" {
+    stub_service_installer
+    load_script
+    load_config
+
+    failed_items=()
+    install_demo_launcher_service
+
+    [ "$(cat "$SERVICE_LOG")" = "--port 4747" ]
+    [ "${#failed_items[@]}" -eq 0 ]
+}
+
+@test "DEMO_LAUNCHER_PORT overrides the configured service port" {
+    stub_service_installer
+    export DEMO_LAUNCHER_PORT=5050
+    load_script
+    load_config
+
+    install_demo_launcher_service
+
+    [ "$(cat "$SERVICE_LOG")" = "--port 5050" ]
+}
+
+@test "install_demo_launcher_service skips when disabled in config" {
+    stub_service_installer
+    # setup.sh reads config.json from its own folder, so use a copy of both
+    local copy="$BATS_TEST_TMPDIR/machine-setup"
+    mkdir -p "$copy"
+    cp "$REPO_ROOT/setup.sh" "$copy/"
+    jq '.shared.demo_launcher_service.enabled = false' "$REPO_ROOT/config.json" > "$copy/config.json"
+    source "$copy/setup.sh"
+    load_config
+
+    install_demo_launcher_service
+
+    [[ ! -f "$SERVICE_LOG" ]]
+}
+
+@test "install_demo_launcher_service records failures in the summary" {
+    stub_service_installer
+    export SERVICE_EXIT=1
+    load_script
+    load_config
+
+    failed_items=()
+    install_demo_launcher_service
+
+    [ "${#failed_items[@]}" -eq 1 ]
+    [ "${failed_items[0]}" = "Demo Launcher service" ]
+}
+
+@test "install-demo-launcher.sh --uninstall removes the service and the canvas" {
+    stub_service_installer
+    local ext_dir="$HOME/repos/repo-setup-scripts/.github/extensions/demo-launcher"
+    mkdir -p "$ext_dir"
+    printf '#!/bin/bash\necho "canvas $*" >> "$SERVICE_LOG"\n' > "$ext_dir/install.sh"
+
+    run bash "$REPO_ROOT/install-demo-launcher.sh" --uninstall
+    [ "$status" -eq 0 ]
+
+    run cat "$SERVICE_LOG"
+    [ "${lines[0]}" = "--uninstall" ]
+    [ "${lines[1]}" = "canvas --uninstall" ]
+}
+
+@test "install-demo-launcher.sh --uninstall fails when nothing is installed" {
+    run bash "$REPO_ROOT/install-demo-launcher.sh" --uninstall
+    [ "$status" -eq 1 ]
+}
+
+@test "install-demo-launcher.sh rejects a non-numeric port" {
+    run bash "$REPO_ROOT/install-demo-launcher.sh" --port abc
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"Usage:"* ]]
+}
+
+@test "install-demo-launcher.sh installs the service with --port and skips it with --no-service" {
+    stub_gh_auth
+    export GH_SCOPES="'codespace', 'delete_repo'"
+    stub_service_installer
+    local repo="$HOME/repos/repo-setup-scripts"
+    mkdir -p "$repo/.git" "$repo/.github/extensions/demo-launcher"
+    printf '#!/bin/bash\ntrue\n' > "$repo/.github/extensions/demo-launcher/install.sh"
+    # git stub so the fast-forward of the fake checkout is a no-op
+    printf '#!/bin/bash\ntrue\n' > "$BATS_TEST_TMPDIR/bin/git"
+    chmod +x "$BATS_TEST_TMPDIR/bin/git"
+
+    run bash "$REPO_ROOT/install-demo-launcher.sh" --port 6060
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"http://127.0.0.1:6060/"* ]]
+    [ "$(cat "$SERVICE_LOG")" = "--port 6060" ]
+
+    rm "$SERVICE_LOG"
+    run bash "$REPO_ROOT/install-demo-launcher.sh" --no-service
+    [ "$status" -eq 0 ]
+    [[ ! -f "$SERVICE_LOG" ]]
+}

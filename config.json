@@ -58,7 +58,11 @@
       "octobooth-demos/repo-setup-scripts",
       "octobooth-demos/tailspin-toys",
       "octobooth-demos/security-octo-supply"
-    ]
+    ],
+    "demo_launcher_service": {
+      "enabled": true,
+      "port": 4747
+    }
   },
   "mac": {
     "packages": {
@@ -76,6 +80,7 @@
       "formulas": [
         "gh",
         "python@3.14",
+        "node",
         "nvm"
       ]
     },

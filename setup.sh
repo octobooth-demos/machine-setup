@@ -148,6 +148,10 @@ load_config() {
 
     gh_auth_scopes=()
     while IFS= read -r line; do gh_auth_scopes+=("$line"); done < <(jq -r '.shared.gh_auth_scopes // [] | .[]' "$CONFIG_FILE")
+
+    # Not readonly: install-demo-launcher.sh overrides these from its flags
+    DEMO_LAUNCHER_SERVICE_ENABLED=$(jq -r '.shared.demo_launcher_service.enabled | if . == null then true else . end' "$CONFIG_FILE")
+    DEMO_LAUNCHER_SERVICE_PORT="${DEMO_LAUNCHER_PORT:-$(jq -r '.shared.demo_launcher_service.port // 4747' "$CONFIG_FILE")}"
 }
 
 # ----------------------------------------
@@ -475,6 +479,34 @@ install_demo_launcher() {
     try_install "Demo Launcher" bash "$installer"
 }
 
+# Path of the standalone Demo Launcher fallback installer in repo-setup-scripts
+demo_launcher_service_installer() {
+    echo "$(demo_launcher_repo_dir)/standalone-launcher/install-service.sh"
+}
+
+# Runs the standalone Demo Launcher fallback (standalone-launcher/server.mjs),
+# which runs alongside the canvas, as a LaunchAgent so it's always up at http://127.0.0.1:<port>/, even without the Copilot app.
+# Run after install_demo_launcher, which syncs the checkout. install-service.sh
+# is idempotent and restarts the service, so it always runs to pick up pulls.
+install_demo_launcher_service() {
+    local installer
+    installer=$(demo_launcher_service_installer)
+
+    if [[ "${DEMO_LAUNCHER_SERVICE_ENABLED:-true}" != "true" ]]; then
+        log_info "Demo Launcher service disabled in config.json, skipping..."
+        return
+    fi
+
+    if [[ ! -f "$installer" ]]; then
+        log_warn "Demo Launcher service installer not found at ${installer/#$HOME/~}, skipping..."
+        return
+    fi
+
+    local port="${DEMO_LAUNCHER_SERVICE_PORT:-4747}"
+    log_info "Installing the Demo Launcher fallback service (alongside the canvas) on port $port..."
+    try_install "Demo Launcher service" bash "$installer" --port "$port"
+}
+
 # Installs VS Code extensions for a given editor
 # $1 = display name, $2 = binary path
 install_vscode_extensions() {
@@ -743,6 +775,7 @@ main() {
     authenticate_gh
     clone_repos
     install_demo_launcher
+    install_demo_launcher_service
 
     # PWA setup is intentionally disabled until the booth workflow needs it again.
     # See README for the rationale and re-enable notes.

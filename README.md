@@ -14,7 +14,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
 - Registers shared MCP servers for Copilot CLI.
-- Clones the demo repos into `~/repos` and, on macOS, installs the Demo Launcher canvas for every Copilot session. `install-demo-launcher.sh` does just that step on a machine that is already set up (see [Demo Launcher](#demo-launcher)).
+- Clones the demo repos into `~/repos`, installs the standalone Demo Launcher fallback service (http://127.0.0.1:4747/), which runs alongside the canvas, and, on macOS, the Demo Launcher canvas for every Copilot session. `install-demo-launcher.sh` does just those steps on a Mac that is already set up (see [Demo Launcher](#demo-launcher)).
 
 ## Configuration
 
@@ -89,6 +89,17 @@ If the error persists, update App Installer through Microsoft Store and check wh
 
 On macOS, `setup.sh` also installs it for every Copilot session, not just the repo-setup-scripts project: it fast-forwards an existing `~/repos/repo-setup-scripts` checkout (`git pull --ff-only`) and runs the repo's `.github/extensions/demo-launcher/install.sh` when present. That writes a loader to `${COPILOT_HOME:-~/.copilot}/extensions/demo-launcher/extension.mjs` that imports the launcher from the checkout, so later pulls update it.
 
+### Standalone Demo Launcher service
+
+repo-setup-scripts also ships a standalone Demo Launcher fallback (`standalone-launcher/server.mjs`, plain Node.js 18+) that runs alongside the canvas. It works in any browser at http://127.0.0.1:4747/, with or without the Copilot app. After the canvas step, the setup scripts install it as a login service from the `~/repos/repo-setup-scripts` checkout:
+
+- **macOS:** `setup.sh` runs `standalone-launcher/install-service.sh --port <port>`, which installs the `com.octobooth.demo-launcher` LaunchAgent (logs: `~/Library/Logs/demo-launcher.log`). `config.json` installs the `node` Homebrew formula so the service has a Node.js to run.
+- **Windows:** `setup.ps1` fast-forwards the checkout and runs `standalone-launcher\install-service.ps1 -Port <port>`, which registers a logon scheduled task named "Demo Launcher" (logs: `%LOCALAPPDATA%\demo-launcher\server.log`).
+
+The installers are idempotent and restart the service, so they run on every setup to pick up the latest checkout. If the checkout doesn't have `standalone-launcher/install-service.*` yet, the step is skipped with a warning. Installer failures are listed in the summary like other steps.
+
+Configure it in `config.json` under `shared.demo_launcher_service`: set `enabled` to `false` to skip it, or change `port` (default `4747`). The `DEMO_LAUNCHER_PORT` environment variable overrides the configured port.
+
 ### Install or update on a machine that's already set up
 
 From this folder, run:
@@ -102,10 +113,11 @@ It's safe to re-run. It:
 1. Checks for `gh`, `git`, and `jq` (`brew install gh jq`) and that the GitHub CLI is logged in. Logging in is interactive, so if it isn't, the script prints the `gh auth login` command to run and stops. It also warns if the login is missing the `codespace`/`delete_repo` scopes (`gh auth refresh -h github.com -s codespace,delete_repo`).
 2. Clones `octobooth-demos/repo-setup-scripts` to `~/repos/repo-setup-scripts`, or pulls it if it's already there.
 3. Runs `install.sh` to (re)write the loader.
+4. Runs `standalone-launcher/install-service.sh` to (re)install and restart the standalone fallback service that runs alongside the canvas, unless it's disabled in `config.json` or you pass `--no-service`. Use `--port N` to pick a different port.
 
-Then restart the GitHub Copilot app (or reload extensions) and ask Copilot to "open the demo launcher" in any session to check it works. To remove it, run `bash install-demo-launcher.sh --uninstall`.
+Then restart the GitHub Copilot app (or reload extensions) and ask Copilot to "open the demo launcher" in any session to check it works, or open http://127.0.0.1:4747/ in a browser. To remove both the canvas and the service, run `bash install-demo-launcher.sh --uninstall`.
 
-`install.sh` is macOS/Linux only, so on Windows use the Demo Launcher from a session in the repo-setup-scripts project. For more on the Demo Launcher itself, see the [repo-setup-scripts quick start](https://github.com/octobooth-demos/repo-setup-scripts#quick-start-booth-machine).
+`install.sh` is macOS/Linux only, so on Windows use the Demo Launcher canvas from a session in the repo-setup-scripts project, or the standalone fallback service, which runs alongside it, at http://127.0.0.1:4747/. To reinstall or remove the Windows service, run `standalone-launcher\install-service.ps1 [-Port N] [-Uninstall]` from `~\repos\repo-setup-scripts`. For more on the Demo Launcher itself, see the [repo-setup-scripts quick start](https://github.com/octobooth-demos/repo-setup-scripts#quick-start-booth-machine).
 
 ## Development and Testing
 

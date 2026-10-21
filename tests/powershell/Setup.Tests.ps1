@@ -237,4 +237,80 @@ Describe 'setup.ps1' {
 
         Get-Content -Path $ghLog -Raw | Should -Not -Match 'auth refresh'
     }
+
+    Context 'Install-DemoLauncherService' {
+        BeforeEach {
+            $env:USERPROFILE = Join-Path $TestDrive 'profile'
+            $script:serviceLog = Join-Path $TestDrive 'service.log'
+            Remove-Item $script:serviceLog -ErrorAction SilentlyContinue
+            Remove-Item Env:\DEMO_LAUNCHER_PORT -ErrorAction SilentlyContinue
+            $script:config = Get-Content -Raw -Path (Join-Path (Get-Location) 'config.json') | ConvertFrom-Json
+        }
+
+        AfterEach {
+            Remove-Item Env:\DEMO_LAUNCHER_PORT -ErrorAction SilentlyContinue
+        }
+
+        BeforeAll {
+            # Stub standalone-launcher/install-service.ps1 that logs its port and exits with
+            # $ExitCode, so no real scheduled task is registered
+            function New-StubServiceInstaller {
+                param([int]$ExitCode = 0)
+                $launcherDir = Join-Path $env:USERPROFILE 'repos\repo-setup-scripts\standalone-launcher'
+                New-Item -Path $launcherDir -ItemType Directory -Force | Out-Null
+                @(
+                    'param([int]$Port, [switch]$Uninstall)'
+                    "Add-Content -Path '$($script:serviceLog)' -Value `"port `$Port`""
+                    "exit $ExitCode"
+                ) | Set-Content -Path (Join-Path $launcherDir 'install-service.ps1')
+            }
+        }
+
+        It 'config enables the service on port 4747' {
+            $script:config.shared.demo_launcher_service.enabled | Should -BeTrue
+            $script:config.shared.demo_launcher_service.port | Should -Be 4747
+        }
+
+        It 'skips without failing when repo-setup-scripts has no service installer' {
+            Install-DemoLauncherService
+
+            $script:failedItems | Should -BeNullOrEmpty
+            Should -Invoke Write-Warn -ParameterFilter { $Message -like '*service installer not found*' }
+        }
+
+        It 'runs install-service.ps1 with the configured port' {
+            New-StubServiceInstaller
+
+            Install-DemoLauncherService
+
+            (Get-Content -Path $script:serviceLog) | Should -Be 'port 4747'
+            $script:failedItems | Should -BeNullOrEmpty
+        }
+
+        It 'lets DEMO_LAUNCHER_PORT override the configured port' {
+            New-StubServiceInstaller
+            $env:DEMO_LAUNCHER_PORT = '5050'
+
+            Install-DemoLauncherService
+
+            (Get-Content -Path $script:serviceLog) | Should -Be 'port 5050'
+        }
+
+        It 'skips when disabled in config' {
+            New-StubServiceInstaller
+            $script:config.shared.demo_launcher_service.enabled = $false
+
+            Install-DemoLauncherService
+
+            Test-Path $script:serviceLog | Should -BeFalse
+        }
+
+        It 'records installer failures' {
+            New-StubServiceInstaller -ExitCode 1
+
+            Install-DemoLauncherService
+
+            $script:failedItems | Should -Contain 'Demo Launcher service'
+        }
+    }
 }
