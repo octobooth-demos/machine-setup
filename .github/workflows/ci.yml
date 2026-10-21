@@ -31,6 +31,8 @@ jobs:
             (.shared.mcp_servers | type == "array") and
             (.shared.gh_auth_scopes | type == "array") and
             (.shared.repos_to_clone | type == "array") and
+            (.shared.demo_launcher_service.enabled | type == "boolean") and
+            (.shared.demo_launcher_service.port | type == "number") and
             (.mac.packages.casks | type == "array") and
             (.mac.packages.formulas | type == "array") and
             (.mac.editors | type == "array") and

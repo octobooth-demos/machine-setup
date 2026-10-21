@@ -482,6 +482,54 @@ function Copy-Repos {
     }
 }
 
+function Get-DemoLauncherRepoDir {
+    return (Join-Path (Join-Path $env:USERPROFILE "repos") "repo-setup-scripts")
+}
+
+# Fast-forwards an existing repo-setup-scripts checkout so the service runs
+# the latest Demo Launcher (Copy-Repos skips repos that already exist)
+function Sync-DemoLauncherRepo {
+    $target = Get-DemoLauncherRepoDir
+    if (-not (Test-Path (Join-Path $target ".git"))) { return }
+
+    Write-Info "Updating $target..."
+    git -C $target pull --ff-only --quiet 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "Could not fast-forward $target; using it as is"
+    }
+    $global:LASTEXITCODE = 0
+}
+
+# Runs the standalone Demo Launcher (launcher/server.mjs) as a logon scheduled
+# task so it's always up at http://127.0.0.1:<port>/, even without the Copilot
+# app. install-service.ps1 is idempotent and restarts the task, so it always
+# runs to pick up pulls.
+function Install-DemoLauncherService {
+    $service = $config.shared.demo_launcher_service
+    if ($null -ne $service -and $service.enabled -eq $false) {
+        Write-Info "Demo Launcher service disabled in config.json, skipping..."
+        return
+    }
+
+    $installer = Join-Path (Get-DemoLauncherRepoDir) "launcher\install-service.ps1"
+    if (-not (Test-Path $installer)) {
+        Write-Warn "Demo Launcher service installer not found at $installer, skipping..."
+        return
+    }
+
+    $port = if ($env:DEMO_LAUNCHER_PORT) { $env:DEMO_LAUNCHER_PORT }
+            elseif ($null -ne $service -and $service.port) { $service.port }
+            else { 4747 }
+
+    # Separate process: the installer uses $ErrorActionPreference = 'Stop' and
+    # leaves non-zero exit codes from probes like git rev-parse
+    $powershell = (Get-Process -Id $PID).Path
+    Write-Info "Installing the Demo Launcher service on port $port..."
+    Invoke-SafeInstall -Description "Demo Launcher service" -Action {
+        & $powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Port $port 2>&1
+    }
+}
+
 function Register-MCPServers {
     Write-Info "Registering MCP servers for Copilot CLI..."
 
@@ -611,6 +659,8 @@ function Invoke-Main {
     # Setup environments
     Connect-GH
     Copy-Repos
+    Sync-DemoLauncherRepo
+    Install-DemoLauncherService
 
     # PWA setup is intentionally disabled until the booth workflow needs it again.
     # See README for the rationale and re-enable notes.
