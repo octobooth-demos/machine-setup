@@ -198,6 +198,7 @@ Describe 'setup.ps1' {
 
     It 'config installs the GitHub Copilot app' {
         $script:config.windows.packages | Should -Contain 'GitHub.CopilotApp'
+        $script:config.windows.packages | Should -Contain 'Git.Git'
         $script:config.shared.gh_auth_scopes | Should -Contain 'codespace'
         $script:config.shared.gh_auth_scopes | Should -Contain 'delete_repo'
     }

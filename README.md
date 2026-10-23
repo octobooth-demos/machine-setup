@@ -44,7 +44,7 @@ Clone this repo so you can update the scripts before each run. A ZIP download ne
    git clone https://github.com/octobooth-demos/machine-setup.git ~/repos/machine-setup
    ```
 
-   Windows (PowerShell). `setup.ps1` doesn't install Git, so install it first if `git --version` fails, then open a new terminal:
+   Windows (PowerShell). `setup.ps1` installs Git, but you need it once to clone this repo before the first run. If `git --version` fails, install it, then open a new terminal:
 
    ```powershell
    winget install --id Git.Git -e --source winget

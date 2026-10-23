@@ -262,6 +262,11 @@ red_component() {
     [ "$status" -eq 0 ]
 }
 
+@test "config installs Git on Windows before cloning repos" {
+    run jq -e '.windows.packages | index("Git.Git")' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+}
+
 @test "create_demo_loader opens the GitHub Copilot app" {
     load_script
     load_config

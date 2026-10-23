@@ -105,6 +105,7 @@
       "Microsoft.VisualStudioCode",
       "Microsoft.VisualStudioCode.Insiders",
       "Microsoft.WindowsTerminal",
+      "Git.Git",
       "GitHub.cli",
       "OpenJS.NodeJS.LTS",
       "VideoLAN.VLC",
