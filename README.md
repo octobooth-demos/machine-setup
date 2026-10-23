@@ -109,19 +109,20 @@ If the error persists, update App Installer through Microsoft Store and check wh
 
 [`octobooth-demos/repo-setup-scripts`](https://github.com/octobooth-demos/repo-setup-scripts) (cloned to `~/repos/repo-setup-scripts`) ships a **Demo Launcher** canvas for the GitHub Copilot app. It creates booth demos in the background with `create-repo.sh`/`create-repo.ps1`, opens sessions for them in the Copilot app, and cleans up old demo repos.
 
-Use **one** of these two install methods per machine, never both. If the Copilot app sees both, it lists two "Demo Launcher" canvases (see [Two Demo Launchers show up](#two-demo-launchers-show-up)).
+### macOS (and Linux): installed loader and project
 
-### macOS (and Linux): installed loader
+On booth machines, do both. The loader makes the launcher available in any session if the app loads user extensions, and the project is a guaranteed fallback.
 
 1. On macOS, run `setup.sh`. On Linux, or a Mac that's already set up, run `install-demo-launcher.sh` (see below). Either one clones the repo to `~/repos/repo-setup-scripts` and runs its `install.sh`.
-2. Open the GitHub Copilot app and sign in with the booth/demo account. **Don't** add `repo-setup-scripts` as a project or repository.
-3. In any session, ask Copilot to "open the demo launcher".
+2. Open the GitHub Copilot app and sign in with the booth/demo account.
+3. Add `~/repos/repo-setup-scripts` as a project.
+4. Ask Copilot to "open the demo launcher" in any session. If that doesn't work, ask from a session in the repo-setup-scripts project.
 
 `setup.sh` fast-forwards an existing `~/repos/repo-setup-scripts` checkout (`git pull --ff-only`) and runs the repo's `.github/extensions/demo-launcher/install.sh` when present. That writes a loader to `${COPILOT_HOME:-~/.copilot}/extensions/demo-launcher/extension.mjs` that imports the launcher from the checkout, so later pulls update it.
 
 ### Windows: repo-setup-scripts project
 
-`install.sh` is macOS/Linux only, so on Windows the project is the only way to get the launcher. Don't also install a loader.
+`install.sh` is macOS/Linux only, so on Windows the project is the only way to get the launcher.
 
 1. Open the GitHub Copilot app and sign in with the booth/demo account.
 2. Add `~/repos/repo-setup-scripts` (or `octobooth-demos/repo-setup-scripts`) as a project.
@@ -145,14 +146,7 @@ Then restart the GitHub Copilot app (or reload extensions) and ask Copilot to "o
 
 ### Two Demo Launchers show up
 
-This happens when the loader is installed **and** `repo-setup-scripts` is added as a project in the Copilot app. The app loads the loader (`user:demo-launcher`) and the project's own copy (`project:demo-launcher`) and shows both everywhere, not just in that project. The two can also drift if they come from separate checkouts.
-
-To fix it on macOS/Linux:
-
-1. In the Copilot app, remove `repo-setup-scripts` from your projects/repositories. Keep the clone in `~/repos/repo-setup-scripts`, because the loader imports from it.
-2. Restart the Copilot app.
-
-On Windows, keep the project and remove any loader instead.
+On Copilot app builds with staff features, the app-wide canvas picker can list two "Demo Launcher" canvases: the installed loader (`user:demo-launcher`) and the project's copy (`project:demo-launcher`). Booth machines run without staff features, so this shouldn't happen there. Both are the same launcher and either one works. To hide one, remove `repo-setup-scripts` from the app's projects and restart the app, but keep the clone in `~/repos/repo-setup-scripts` because the loader imports from it.
 
 For more on the Demo Launcher itself, see the [repo-setup-scripts quick start](https://github.com/octobooth-demos/repo-setup-scripts#quick-start-booth-machine).
 
