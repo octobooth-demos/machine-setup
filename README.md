@@ -32,15 +32,30 @@ This repository contains setup scripts for configuring booth machines. The scrip
 
 ## Setup Instructions
 
-### Download the setup scripts
+### Get the setup scripts
 
-1. [Download the setup scripts as a ZIP](https://github.com/octobooth-demos/machine-setup/archive/refs/heads/main.zip). No Git installation is required.
-2. Extract the ZIP file (on Windows, right-click it and choose **Extract All**).
-3. Follow the instructions for your operating system below, running commands from the extracted `machine-setup-main` folder. Keep all files together; the scripts require `config.json`, and `setup.sh` also needs the `iterm2/` folder.
+Clone this repo so you can update the scripts before each run. A ZIP download never updates, so an old copy keeps running old scripts.
+
+1. Clone it (macOS Terminal or Windows Terminal):
+
+   ```bash
+   git clone https://github.com/octobooth-demos/machine-setup.git ~/repos/machine-setup
+   ```
+
+   Or, if the GitHub CLI is already installed, `gh repo clone octobooth-demos/machine-setup ~/repos/machine-setup`. On a new Mac, `git` may prompt you to install the Command Line Tools first.
+2. Before each booth day, and before re-running `setup.sh`, `setup.ps1`, or `install-demo-launcher.sh`, pull the latest:
+
+   ```bash
+   git -C ~/repos/machine-setup pull
+   ```
+
+3. Follow the instructions for your operating system below, running commands from `~/repos/machine-setup`.
+
+**Fallback for a new machine without Git:** [download the ZIP](https://github.com/octobooth-demos/machine-setup/archive/refs/heads/main.zip), extract it (on Windows, right-click it and choose **Extract All**), and run commands from the extracted `machine-setup-main` folder. Keep all files together, because the scripts need `config.json` and `setup.sh` also needs the `iterm2/` folder. Setup installs Git and the GitHub CLI, so switch to a clone afterward. If you stay on the ZIP, download it again before re-running any script.
 
 ### macOS
 
-1. Open a terminal and navigate to the extracted `machine-setup-main` folder.
+1. Open a terminal and go to `~/repos/machine-setup` (or the extracted `machine-setup-main` folder).
 2. Run the setup script:
 
    ```bash
@@ -55,7 +70,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 ### Windows
 
 1. Open Windows Terminal as an administrator.
-2. Navigate to the extracted `machine-setup-main` folder.
+2. Go to `~/repos/machine-setup` (`cd $HOME\repos\machine-setup`), or the extracted `machine-setup-main` folder.
 3. Run the setup script:
 
    ```powershell
@@ -130,9 +145,11 @@ On booth machines, do both. The loader makes the launcher available in any sessi
 
 ### Install or update on a machine that's already set up
 
-From this folder, run:
+Run it from an up-to-date clone, because an old copy installs with old logic:
 
 ```bash
+git -C ~/repos/machine-setup pull
+cd ~/repos/machine-setup
 bash install-demo-launcher.sh
 ```
 
