@@ -457,6 +457,8 @@ function Connect-GitHubWeb {
 }
 
 function Copy-Repos {
+    param([switch]$SkipClone)
+
     $reposDir = Join-Path $env:USERPROFILE "repos"
 
     $repos = $config.shared.repos_to_clone
@@ -476,6 +478,8 @@ function Copy-Repos {
 
         if ((Test-ShouldSkipInstalled) -and (Test-Path $target)) {
             Write-Info "$repoName already exists, skipping..."
+        } elseif ($SkipClone) {
+            Write-Warn "Skipping clone: $repo. Authenticate with 'gh auth login' and rerun setup."
         } else {
             Invoke-SafeInstall -Description "clone: $repo" -Action {
                 gh repo clone $repo $target 2>&1
@@ -607,9 +611,21 @@ function Invoke-Main {
     # Launch post-install apps
     Start-PostInstallApps
 
+    $skipRepoClones = $false
     # Authentication steps need a human; NONINTERACTIVE=true skips them (e.g. for sandbox runs)
     if ($script:NonInteractive) {
         Write-Warn "NONINTERACTIVE set: skipping GitHub web and CLI authentication"
+        $skipRepoClones = $true
+        if (Get-Command gh -ErrorAction SilentlyContinue) {
+            gh auth status -h github.com 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                $skipRepoClones = $false
+                Install-GHExtensions
+            }
+        }
+        if ($skipRepoClones) {
+            Write-Warn "GitHub CLI credentials unavailable: deferring CLI extensions and repository clones. Authenticate with 'gh auth login' and rerun setup."
+        }
     }
     else {
         # Web authentication (Edge is preinstalled on Windows)
@@ -618,7 +634,7 @@ function Invoke-Main {
         # Setup environments
         Connect-GH
     }
-    Copy-Repos
+    Copy-Repos -SkipClone:$skipRepoClones
 
     # PWA setup is intentionally disabled until the booth workflow needs it again.
     # See README for the rationale and re-enable notes.

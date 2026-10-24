@@ -204,6 +204,96 @@ Describe 'setup.ps1' {
         $script:config.shared.gh_auth_scopes | Should -Contain 'project'
     }
 
+    It 'Copy-Repos defers new clones without recording failures when requested' {
+        $env:USERPROFILE = $TestDrive
+        Mock gh { throw 'Cloning must not run without credentials' }
+
+        Copy-Repos -SkipClone
+
+        Should -Invoke gh -Times 0 -Exactly
+        Should -Invoke Write-Warn -Times $script:config.shared.repos_to_clone.Count -Exactly -ParameterFilter {
+            $Message -like 'Skipping clone:*'
+        }
+        $script:failedItems | Should -BeNullOrEmpty
+    }
+
+    Context 'Invoke-Main authentication modes' {
+        BeforeEach {
+            $script:savedNonInteractive = $script:NonInteractive
+            Mock Test-Prerequisites { $true }
+            Mock Import-Config { }
+            Mock Install-Packages { }
+            Mock Set-VLCConfiguration { }
+            Mock Start-PostInstallApps { }
+            Mock Connect-GitHubWeb { }
+            Mock Connect-GH { }
+            Mock Install-GHExtensions { }
+            Mock Copy-Repos { }
+            Mock Initialize-Editors { }
+            Mock Register-MCPServers { }
+            Mock New-DemoLoader { }
+            Mock Write-Summary { }
+            Mock Get-Command { $true } -ParameterFilter { $Name -eq 'gh' }
+        }
+
+        AfterEach {
+            $script:NonInteractive = $script:savedNonInteractive
+        }
+
+        It 'uses available credentials without login or scope refresh' {
+            $script:NonInteractive = $true
+            Mock gh { $global:LASTEXITCODE = 0 }
+
+            Invoke-Main
+
+            Should -Invoke gh -Times 1 -Exactly
+            Should -Invoke Install-GHExtensions -Times 1 -Exactly
+            Should -Invoke Copy-Repos -Times 1 -Exactly -ParameterFilter { -not $SkipClone }
+            Should -Invoke Connect-GH -Times 0 -Exactly
+            Should -Invoke Connect-GitHubWeb -Times 0 -Exactly
+        }
+
+        It 'defers extensions and clones when credentials are unavailable' {
+            $script:NonInteractive = $true
+            Mock gh { $global:LASTEXITCODE = 1 }
+
+            Invoke-Main
+
+            Should -Invoke Install-GHExtensions -Times 0 -Exactly
+            Should -Invoke Copy-Repos -Times 1 -Exactly -ParameterFilter { $SkipClone }
+            Should -Invoke Connect-GH -Times 0 -Exactly
+            Should -Invoke Connect-GitHubWeb -Times 0 -Exactly
+            Should -Invoke Write-Warn -Times 1 -Exactly -ParameterFilter {
+                $Message -like 'GitHub CLI credentials unavailable:*'
+            }
+            $script:failedItems | Should -BeNullOrEmpty
+        }
+
+        It 'defers extensions and clones when gh is unavailable' {
+            $script:NonInteractive = $true
+            Mock Get-Command { $null } -ParameterFilter { $Name -eq 'gh' }
+            Mock gh { throw 'GitHub CLI is unavailable' }
+
+            Invoke-Main
+
+            Should -Invoke gh -Times 0 -Exactly
+            Should -Invoke Install-GHExtensions -Times 0 -Exactly
+            Should -Invoke Copy-Repos -Times 1 -Exactly -ParameterFilter { $SkipClone }
+        }
+
+        It 'preserves interactive authentication and cloning by default' {
+            $script:NonInteractive = $false
+            Mock gh { throw 'Connect-GH handles interactive authentication' }
+
+            Invoke-Main
+
+            Should -Invoke Connect-GitHubWeb -Times 1 -Exactly
+            Should -Invoke Connect-GH -Times 1 -Exactly
+            Should -Invoke Copy-Repos -Times 1 -Exactly -ParameterFilter { -not $SkipClone }
+            Should -Invoke gh -Times 0 -Exactly
+        }
+    }
+
     It 'Confirm-GHScope refreshes only missing scopes using the stored login' {
         $ghLog = Join-Path $TestDrive 'gh-scope-refresh.log'
         $env:GH_TOKEN = 'env-token'
