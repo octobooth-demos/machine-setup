@@ -205,7 +205,7 @@ Describe 'setup.ps1' {
     }
 
     It 'Copy-Repos defers new clones without recording failures when requested' {
-        $env:USERPROFILE = $TestDrive
+        $env:USERPROFILE = Join-Path $TestDrive 'unauthenticated'
         Mock gh { throw 'Cloning must not run without credentials' }
 
         Copy-Repos -SkipClone
@@ -240,13 +240,18 @@ Describe 'setup.ps1' {
             $script:NonInteractive = $script:savedNonInteractive
         }
 
-        It 'uses available credentials without login or scope refresh' {
+        It 'uses active credentials even when an inactive account is expired' {
             $script:NonInteractive = $true
-            Mock gh { $global:LASTEXITCODE = 0 }
+            $ghLog = Join-Path $TestDrive 'gh-active-auth.log'
+            function global:gh {
+                Add-Content -Path $ghLog -Value ($args -join ' ')
+                $global:LASTEXITCODE = if ($args -contains '--active') { 0 } else { 1 }
+            }
 
             Invoke-Main
 
-            Should -Invoke gh -Times 1 -Exactly
+            @(Get-Content -Path $ghLog).Count | Should -Be 1
+            Get-Content -Path $ghLog | Should -Be 'auth status --active -h github.com'
             Should -Invoke Install-GHExtensions -Times 1 -Exactly
             Should -Invoke Copy-Repos -Times 1 -Exactly -ParameterFilter { -not $SkipClone }
             Should -Invoke Connect-GH -Times 0 -Exactly

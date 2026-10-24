@@ -617,7 +617,7 @@ function Invoke-Main {
         Write-Warn "NONINTERACTIVE set: skipping GitHub web and CLI authentication"
         $skipRepoClones = $true
         if (Get-Command gh -ErrorAction SilentlyContinue) {
-            gh auth status -h github.com 2>&1 | Out-Null
+            gh auth status --active -h github.com 2>&1 | Out-Null
             if ($LASTEXITCODE -eq 0) {
                 $skipRepoClones = $false
                 Install-GHExtensions
