@@ -39,7 +39,13 @@ Clone this repo so you can update the scripts before each run. A ZIP download ne
 
 1. Clone it.
 
-   macOS (Terminal). On a new Mac, `git` may prompt you to install the Command Line Tools first:
+   macOS (Terminal). On a new Mac, `git` doesn't work until the Xcode Command Line Tools are installed. Install them first: run the command below, click **Install** in the dialog, and wait for it to finish. If it says they're already installed, move on.
+
+   ```bash
+   xcode-select --install
+   ```
+
+   Then clone:
 
    ```bash
    git clone https://github.com/octobooth-demos/machine-setup.git ~/repos/machine-setup
@@ -61,7 +67,7 @@ Clone this repo so you can update the scripts before each run. A ZIP download ne
 
 3. Follow the instructions for your operating system below, running commands from that folder.
 
-**Fallback for a new Mac without Git:** [download the ZIP](https://github.com/octobooth-demos/machine-setup/archive/refs/heads/main.zip) and run commands from the extracted `machine-setup-main` folder. Keep all files together, because the scripts need `config.json` and `setup.sh` also needs the `iterm2/` folder. Setup installs Git, so switch to a clone afterward. If you stay on the ZIP, download it again before re-running any script.
+**Fallback for a new Mac without Git:** [download the ZIP](https://github.com/octobooth-demos/machine-setup/archive/refs/heads/main.zip) and run commands from the extracted `machine-setup-main` folder. Keep all files together, because the scripts need `config.json` and `setup.sh` also needs the `iterm2/` folder. Setup installs the Xcode Command Line Tools and Git, so switch to a clone afterward. If you stay on the ZIP, download it again before re-running any script.
 
 ### macOS
 
@@ -71,6 +77,8 @@ Clone this repo so you can update the scripts before each run. A ZIP download ne
    ```bash
    bash setup.sh
    ```
+
+   The script first checks for the Xcode Command Line Tools, which `git` (used to clone the demo repos) and Homebrew need. If they're missing, it opens the installer: click **Install**, and the script waits until it finishes (up to 30 minutes; set `XCODE_CLT_TIMEOUT` in seconds to change this). If the install fails or times out, run `xcode-select --install`, finish the installer, and run `bash setup.sh` again.
 
 3. The script pauses so you can sign in to GitHub.com in Chrome with the booth/demo account.
 4. Approve the GitHub CLI login (or scope upgrade) in the browser when prompted.

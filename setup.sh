@@ -74,6 +74,42 @@ print_summary() {
 # Bootstrap
 # ----------------------------------------
 
+# How long to wait (in seconds) for the Xcode Command Line Tools installer
+XCODE_CLT_TIMEOUT="${XCODE_CLT_TIMEOUT:-1800}"
+XCODE_CLT_POLL_INTERVAL="${XCODE_CLT_POLL_INTERVAL:-10}"
+
+# Returns 0 if the Xcode Command Line Tools are installed
+xcode_clt_installed() {
+    local clt_path
+    clt_path=$(xcode-select -p 2>/dev/null) && [[ -d "$clt_path" ]]
+}
+
+# Installs the Xcode Command Line Tools if missing. On a new Mac, git is only a
+# stub until they are installed, and Homebrew requires them too.
+install_xcode_clt() {
+    if xcode_clt_installed; then
+        log_success "Xcode Command Line Tools are installed"
+        return 0
+    fi
+
+    log_info "Installing Xcode Command Line Tools (needed for git and Homebrew)..."
+    log_info "Click Install in the dialog that appears and accept the license. This can take several minutes."
+    xcode-select --install &> /dev/null || true
+
+    local waited=0
+    until xcode_clt_installed; do
+        if (( waited >= XCODE_CLT_TIMEOUT )); then
+            log_error "Xcode Command Line Tools were not installed after ${XCODE_CLT_TIMEOUT}s."
+            log_error "Run 'xcode-select --install', finish the installer, then run setup.sh again."
+            exit 1
+        fi
+        sleep "$XCODE_CLT_POLL_INTERVAL"
+        waited=$((waited + XCODE_CLT_POLL_INTERVAL))
+    done
+
+    log_success "Xcode Command Line Tools installed"
+}
+
 # Installs Homebrew if not present and updates it
 install_homebrew() {
     if ! command -v brew &> /dev/null; then
@@ -724,7 +760,8 @@ EOF
 # ----------------------------------------
 
 main() {
-    # Bootstrap: install homebrew and jq before loading config
+    # Bootstrap: install Xcode CLT (for git), homebrew, and jq before loading config
+    install_xcode_clt
     install_homebrew
     install_jq
     load_config
