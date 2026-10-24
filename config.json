@@ -111,6 +111,7 @@
       "Git.Git",
       "GitHub.cli",
       "OpenJS.NodeJS.LTS",
+      "Python.Python.3.14",
       "VideoLAN.VLC",
       "GitHub.Copilot",
       "GitHub.CopilotApp",

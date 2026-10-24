@@ -92,6 +92,8 @@ Clone this repo so you can update the scripts before each run. A ZIP download ne
 6. A launcher script is created on the Desktop.
 7. Store booth videos in `C:\Users\<YourUsername>\Videos` so the launcher opens them in VLC.
 
+Set `$env:NONINTERACTIVE = "true"` before running `setup.ps1` to skip GitHub browser login, CLI login, and scope refresh. Existing CLI credentials (including `GH_TOKEN` or `GITHUB_TOKEN`) are used to install extensions and clone repositories. Without usable credentials, those steps are deferred with warnings; authenticate with `gh auth login` and rerun setup to complete them.
+
 ### GitHub CLI login
 
 The setup scripts handle this for you, but check it on every booth machine (and do it by hand if a script warned about it):
