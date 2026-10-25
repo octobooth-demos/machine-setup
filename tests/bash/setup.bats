@@ -585,7 +585,7 @@ STUB
     [ "$status" -eq 0 ]
 
     run jq -r '.mac.dock_apps | join(",")' "$REPO_ROOT/config.json"
-    [ "$output" = "GitHub Copilot,Visual Studio Code,Visual Studio Code - Insiders,iTerm" ]
+    [ "$output" = "Google Chrome,GitHub Copilot,Visual Studio Code,Visual Studio Code - Insiders,iTerm" ]
 }
 
 @test "configure_dock adds apps, hides recents, and restarts the Dock once" {
@@ -615,7 +615,7 @@ STUB
 
     run configure_dock
     [ "$status" -eq 0 ]
-    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "4" ]
+    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "5" ]
 
     run grep -E 'dockutil --add|defaults write|killall' "$DOCK_LOG"
     [ "$status" -ne 0 ]
@@ -633,5 +633,22 @@ STUB
 
     run grep -cxF "iTerm" "$DOCK_FILE"
     [ "$output" = "0" ]
-    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "3" ]
+    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "4" ]
+}
+
+@test "configure_dock doesn't duplicate Chrome when it's already in the Dock" {
+    stub_dock
+    echo "Google Chrome" > "$DOCK_FILE"
+    load_script
+    load_config
+
+    run configure_dock
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Google Chrome is already in the Dock"* ]]
+
+    run grep -cxF "Google Chrome" "$DOCK_FILE"
+    [ "$output" = "1" ]
+
+    run grep -F 'dockutil --add' "$DOCK_LOG"
+    [[ "$output" != *"Google Chrome"* ]]
 }

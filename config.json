@@ -105,6 +105,7 @@
     },
     "post_install_launch": [],
     "dock_apps": [
+      "Google Chrome",
       "GitHub Copilot",
       "Visual Studio Code",
       "Visual Studio Code - Insiders",
