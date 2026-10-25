@@ -103,7 +103,9 @@
       "color_preset": "GitHub Dark Default",
       "color_scheme_file": "iterm2/github-dark-default.itermcolors",
       "font": "MonaspaceNeonFrozen-Regular 14",
-      "theme": "minimal"
+      "theme": "minimal",
+      "ligatures": true,
+      "thin_strokes": "never"
     },
     "post_install_launch": [],
     "dock_apps": [

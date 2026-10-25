@@ -161,6 +161,10 @@ load_config() {
     readonly ITERM2_FONT
     ITERM2_THEME=$(jq -r '.mac.iterm2.theme // "regular"' "$CONFIG_FILE")
     readonly ITERM2_THEME
+    ITERM2_LIGATURES=$(jq -r '.mac.iterm2.ligatures // false' "$CONFIG_FILE")
+    readonly ITERM2_LIGATURES
+    ITERM2_THIN_STROKES=$(jq -r '.mac.iterm2.thin_strokes // "retina-only"' "$CONFIG_FILE")
+    readonly ITERM2_THIN_STROKES
     MONASPACE_FROZEN_VERSION=$(jq -r '.mac.monaspace_frozen_version // empty' "$CONFIG_FILE")
     readonly MONASPACE_FROZEN_VERSION
 
@@ -289,6 +293,20 @@ iterm2_theme_value() {
     esac
 }
 
+# Prints iTerm2's "Thin Strokes" profile value for a setting name
+# (Settings > Profiles > Text > Use thin strokes), from iTermThinStrokesSetting
+# in iTerm2's sources/Settings/Profiles/ITAddressBookMgr.h
+iterm2_thin_strokes_value() {
+    case "$1" in
+        never) echo 0 ;;
+        retina-dark-backgrounds-only) echo 1 ;;
+        dark-backgrounds-only) echo 2 ;;
+        always) echo 3 ;;
+        retina-only) echo 4 ;;
+        *) return 1 ;;
+    esac
+}
+
 # Applies the configured color scheme, font, and theme to iTerm2 (color scheme
 # and font on the default profile; the scheme is also added to Settings >
 # Profiles > Colors > Color Presets)
@@ -307,9 +325,20 @@ configure_iterm2() {
         return 1
     fi
 
+    local thin_strokes_value
+    if ! thin_strokes_value=$(iterm2_thin_strokes_value "$ITERM2_THIN_STROKES"); then
+        log_error "Unknown iTerm2 thin_strokes '$ITERM2_THIN_STROKES' in config.json"
+        return 1
+    fi
+
+    if [[ "$ITERM2_LIGATURES" != "true" && "$ITERM2_LIGATURES" != "false" ]]; then
+        log_error "iTerm2 ligatures must be true or false in config.json"
+        return 1
+    fi
+
     # Records every applied setting, so changing any of them in config.json
     # re-applies them on machines that were already set up
-    local settings="$ITERM2_COLOR_PRESET|$ITERM2_FONT|$ITERM2_THEME"
+    local settings="$ITERM2_COLOR_PRESET|$ITERM2_FONT|$ITERM2_THEME|ligatures=$ITERM2_LIGATURES|thin_strokes=$ITERM2_THIN_STROKES"
 
     log_info "Configuring iTerm2 with the $ITERM2_COLOR_PRESET colors..."
 
@@ -366,7 +395,7 @@ configure_iterm2() {
     # PlistBuddy can't overwrite with Add/Merge, so clear existing values first
     local profile=":New Bookmarks:$profile_index"
     local key
-    for key in "${color_keys[@]}" "$separate_colors_key" "Normal Font"; do
+    for key in "${color_keys[@]}" "$separate_colors_key" "Normal Font" "ASCII Ligatures" "Thin Strokes"; do
         "$plist_buddy" -c "Delete '$profile:$key'" "$prefs_file" &> /dev/null || true
     done
     for key in ":Default Bookmark Guid" ":$sentinel_key" ":$legacy_sentinel_key" ":$theme_key" "$preset_key"; do
@@ -380,6 +409,8 @@ configure_iterm2() {
             -c "Merge '$ITERM2_COLOR_SCHEME_FILE' '$profile'" \
             -c "Add '$profile:$separate_colors_key' bool false" \
             -c "Add '$profile:Normal Font' string '$ITERM2_FONT'" \
+            -c "Add '$profile:ASCII Ligatures' bool $ITERM2_LIGATURES" \
+            -c "Add '$profile:Thin Strokes' integer $thin_strokes_value" \
             -c "Add ':Default Bookmark Guid' string $profile_guid" \
             -c "Add '$preset_key' dict" \
             -c "Merge '$ITERM2_COLOR_SCHEME_FILE' '$preset_key'" \

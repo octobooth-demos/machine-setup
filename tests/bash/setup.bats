@@ -369,6 +369,66 @@ STUB
     [[ ! -f "$HOME/Library/Fonts/.monaspace-frozen-version" ]]
 }
 
+@test "config turns on ligatures and turns off thin strokes in iTerm2" {
+    run jq -r '.mac.iterm2.ligatures, .mac.iterm2.thin_strokes' "$REPO_ROOT/config.json"
+    [ "${lines[0]}" = "true" ]
+    [ "${lines[1]}" = "never" ]
+}
+
+@test "iterm2_thin_strokes_value matches iTerm2's thin strokes values" {
+    load_script
+
+    [ "$(iterm2_thin_strokes_value never)" = "0" ]
+    [ "$(iterm2_thin_strokes_value always)" = "3" ]
+    [ "$(iterm2_thin_strokes_value retina-only)" = "4" ]
+
+    run iterm2_thin_strokes_value bogus
+    [ "$status" -ne 0 ]
+}
+
+@test "configure_iterm2 sets ligatures and thin strokes on the default profile" {
+    stub_iterm2_tools
+    load_script
+    load_config
+
+    configure_iterm2
+
+    run prefs_value ":New Bookmarks:0:ASCII Ligatures"
+    [ "$output" = "true" ]
+    run prefs_value ":New Bookmarks:0:Thin Strokes"
+    [ "$output" = "0" ]
+}
+
+@test "configure_iterm2 re-applies on machines set up before ligatures and thin strokes" {
+    stub_iterm2_tools
+    load_script
+    load_config
+
+    # A machine configured by the previous version of setup.sh
+    plutil -create xml1 "$PREFS_STORE"
+    /usr/libexec/PlistBuddy \
+        -c "Add ':MachineSetupITerm2Settings' string 'GitHub Dark Default|MonaspaceNeonFrozen-Regular 14|minimal'" \
+        -c "Add ':New Bookmarks' array" \
+        -c "Add ':New Bookmarks:0' dict" \
+        -c "Add ':New Bookmarks:0:Name' string Default" \
+        -c "Add ':New Bookmarks:0:Guid' string GUID-A" \
+        -c "Add ':New Bookmarks:0:ASCII Ligatures' bool false" \
+        -c "Add ':New Bookmarks:0:Thin Strokes' integer 4" \
+        "$PREFS_STORE"
+
+    configure_iterm2
+
+    run prefs_value ":New Bookmarks:0:ASCII Ligatures"
+    [ "$output" = "true" ]
+    run prefs_value ":New Bookmarks:0:Thin Strokes"
+    [ "$output" = "0" ]
+
+    : > "$DEFAULTS_LOG"
+    configure_iterm2
+    run grep -c '^import' "$DEFAULTS_LOG"
+    [ "$output" = "0" ]
+}
+
 @test "configure_iterm2 refuses to change preferences while iTerm2 is running" {
     stub_iterm2_tools
     export ITERM2_RUNNING=true
