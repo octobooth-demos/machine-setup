@@ -243,10 +243,10 @@ red_component() {
     [ "$status" -ne 0 ]
 }
 
-@test "config uses Monaspace Neon Frozen 14 and the Compact theme in iTerm2" {
+@test "config uses Monaspace Neon Frozen 14 and the Minimal theme in iTerm2" {
     run jq -r '.mac.iterm2.font, .mac.iterm2.theme, .mac.monaspace_frozen_version' "$REPO_ROOT/config.json"
     [ "${lines[0]}" = "MonaspaceNeonFrozen-Regular 14" ]
-    [ "${lines[1]}" = "compact" ]
+    [ "${lines[1]}" = "minimal" ]
     [ "${lines[2]}" = "1.400" ]
 }
 
@@ -261,7 +261,7 @@ red_component() {
     [ "$status" -ne 0 ]
 }
 
-@test "configure_iterm2 sets the Compact theme" {
+@test "configure_iterm2 sets the Minimal theme" {
     stub_iterm2_tools
     load_script
     load_config
@@ -269,7 +269,7 @@ red_component() {
     configure_iterm2
 
     run prefs_value ":TabStyleWithAutomaticOption"
-    [ "$output" = "6" ]
+    [ "$output" = "5" ]
 }
 
 @test "configure_iterm2 re-applies on machines set up before the font and theme settings" {
@@ -281,7 +281,7 @@ red_component() {
     plutil -create xml1 "$PREFS_STORE"
     /usr/libexec/PlistBuddy \
         -c "Add ':MachineSetupColorPreset' string 'GitHub Dark Default'" \
-        -c "Add ':TabStyleWithAutomaticOption' integer 5" \
+        -c "Add ':TabStyleWithAutomaticOption' integer 4" \
         -c "Add ':New Bookmarks' array" \
         -c "Add ':New Bookmarks:0' dict" \
         -c "Add ':New Bookmarks:0:Name' string Default" \
@@ -294,7 +294,7 @@ red_component() {
     run prefs_value ":New Bookmarks:0:Normal Font"
     [ "$output" = "MonaspaceNeonFrozen-Regular 14" ]
     run prefs_value ":TabStyleWithAutomaticOption"
-    [ "$output" = "6" ]
+    [ "$output" = "5" ]
     run prefs_value ":MachineSetupColorPreset"
     [ "$status" -ne 0 ]
 }
