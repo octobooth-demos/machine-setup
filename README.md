@@ -12,6 +12,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
 - Installs iTerm2 on macOS and sets its default profile to the GitHub Dark Default color scheme with Monaspace Neon.
 - Installs the SF Mono, Monaspace, and Mona Sans fonts on macOS.
+- Makes Google Chrome the default browser on macOS (via `defaultbrowser`), including when Chrome was already installed.
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
 - Registers shared MCP servers for Copilot CLI.
@@ -81,9 +82,10 @@ Clone this repo so you can update the scripts before each run. A ZIP download ne
    The script first checks for the Xcode Command Line Tools, which `git` (used to clone the demo repos) and Homebrew need. If they're missing, it opens the installer: click **Install**, and the script waits until it finishes (up to 30 minutes; set `XCODE_CLT_TIMEOUT` in seconds to change this). If the install fails or times out, run `xcode-select --install`, finish the installer, and run `bash setup.sh` again.
 
 3. The script pauses so you can sign in to GitHub.com in Chrome with the booth/demo account.
-4. Approve the GitHub CLI login (or scope upgrade) in the browser when prompted.
-5. A launcher script that also opens the GitHub Copilot app is created on the Desktop.
-6. Store booth videos in `$HOME/Videos` so the launcher opens them in VLC.
+4. If Chrome isn't the default browser yet, macOS asks whether to change it. Click **Use “Google Chrome”**, then press Enter. This also works if Chrome was installed before setup ran. If Chrome is already the default, the script skips this step.
+5. Approve the GitHub CLI login (or scope upgrade) in the browser when prompted.
+6. A launcher script that also opens the GitHub Copilot app is created on the Desktop.
+7. Store booth videos in `$HOME/Videos` so the launcher opens them in VLC.
 
 ### Windows
 

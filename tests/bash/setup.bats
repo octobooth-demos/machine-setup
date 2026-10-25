@@ -480,3 +480,64 @@ STUB
     [ "$status" -eq 1 ]
     [[ "$output" == *"xcode-select --install"* ]]
 }
+
+# Stubs defaultbrowser: lists browsers with "*" on $DEFAULT_BROWSER_FILE's
+# contents, and `defaultbrowser chrome` switches it (simulating "Use Chrome")
+stub_defaultbrowser() {
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export DEFAULT_BROWSER_FILE="$BATS_TEST_TMPDIR/default-browser"
+    export DEFAULTBROWSER_LOG="$BATS_TEST_TMPDIR/defaultbrowser.log"
+    echo "$1" > "$DEFAULT_BROWSER_FILE"
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+
+    cat > "$BATS_TEST_TMPDIR/bin/defaultbrowser" <<'STUB'
+#!/bin/bash
+echo "$*" >> "$DEFAULTBROWSER_LOG"
+if [[ -n "$1" ]]; then
+    [[ "${ACCEPT_DIALOG:-true}" == "true" ]] && echo "$1" > "$DEFAULT_BROWSER_FILE"
+    exit 0
+fi
+current=$(cat "$DEFAULT_BROWSER_FILE")
+for b in safari chrome; do
+    if [[ "$b" == "$current" ]]; then echo "* $b"; else echo "  $b"; fi
+done
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/defaultbrowser"
+}
+
+@test "config installs defaultbrowser on macOS" {
+    run jq -e '.mac.packages.formulas | index("defaultbrowser")' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+}
+
+@test "set_default_browser_chrome skips when Chrome is already the default" {
+    stub_defaultbrowser chrome
+    load_script
+
+    run set_default_browser_chrome < /dev/null
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already the default browser"* ]]
+
+    run grep -Fx "chrome" "$DEFAULTBROWSER_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "set_default_browser_chrome switches the default to Chrome" {
+    stub_defaultbrowser safari
+    load_script
+
+    run set_default_browser_chrome <<< ""
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Chrome is now the default browser"* ]]
+    [ "$(cat "$DEFAULT_BROWSER_FILE")" = "chrome" ]
+}
+
+@test "set_default_browser_chrome reports failure when the dialog is declined" {
+    stub_defaultbrowser safari
+    export ACCEPT_DIALOG=false
+    load_script
+
+    run set_default_browser_chrome <<< ""
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"System Settings"* ]]
+}
