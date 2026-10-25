@@ -53,7 +53,8 @@
     "gh_auth_scopes": [
       "codespace",
       "delete_repo",
-      "project"
+      "project",
+      "workflow"
     ],
     "repos_to_clone": [
       "octobooth-demos/repo-setup-scripts",
@@ -101,7 +102,8 @@
     "iterm2": {
       "color_preset": "GitHub Dark Default",
       "color_scheme_file": "iterm2/github-dark-default.itermcolors",
-      "font": "MonaspaceNeon-Regular 12"
+      "font": "MonaspaceNeonFrozen-Regular 14",
+      "theme": "minimal"
     },
     "post_install_launch": [],
     "dock_apps": [
@@ -110,7 +112,8 @@
       "Visual Studio Code",
       "Visual Studio Code - Insiders",
       "iTerm"
-    ]
+    ],
+    "monaspace_frozen_version": "1.400"
   },
   "windows": {
     "packages": [

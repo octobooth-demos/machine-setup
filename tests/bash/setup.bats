@@ -166,7 +166,7 @@ red_component() {
     [ "$output" = "false" ]
 
     run prefs_value ":New Bookmarks:0:Normal Font"
-    [ "$output" = "MonaspaceNeon-Regular 12" ]
+    [ "$output" = "MonaspaceNeonFrozen-Regular 14" ]
 
     run red_component ":Custom Color Presets:GitHub Dark Default:Background Color"
     [ "$output" = "0.0510" ]
@@ -204,7 +204,7 @@ red_component() {
     [ "$output" = "0.0510" ]
 
     run prefs_value ":New Bookmarks:1:Normal Font"
-    [ "$output" = "MonaspaceNeon-Regular 12" ]
+    [ "$output" = "MonaspaceNeonFrozen-Regular 14" ]
 
     run prefs_value ":New Bookmarks:1:Use Separate Colors for Light and Dark Mode"
     [ "$output" = "false" ]
@@ -237,10 +237,136 @@ red_component() {
     FORCE_REINSTALL=true
     configure_iterm2
     run prefs_value ":New Bookmarks:0:Normal Font"
-    [ "$output" = "MonaspaceNeon-Regular 12" ]
+    [ "$output" = "MonaspaceNeonFrozen-Regular 14" ]
 
     run prefs_value ":New Bookmarks:1"
     [ "$status" -ne 0 ]
+}
+
+@test "config uses Monaspace Neon Frozen 14 and the Minimal theme in iTerm2" {
+    run jq -r '.mac.iterm2.font, .mac.iterm2.theme, .mac.monaspace_frozen_version' "$REPO_ROOT/config.json"
+    [ "${lines[0]}" = "MonaspaceNeonFrozen-Regular 14" ]
+    [ "${lines[1]}" = "minimal" ]
+    [ "${lines[2]}" = "1.400" ]
+}
+
+@test "iterm2_theme_value matches iTerm2's tab style values" {
+    load_script
+
+    [ "$(iterm2_theme_value regular)" = "4" ]
+    [ "$(iterm2_theme_value minimal)" = "5" ]
+    [ "$(iterm2_theme_value compact)" = "6" ]
+
+    run iterm2_theme_value bogus
+    [ "$status" -ne 0 ]
+}
+
+@test "configure_iterm2 sets the Minimal theme" {
+    stub_iterm2_tools
+    load_script
+    load_config
+
+    configure_iterm2
+
+    run prefs_value ":TabStyleWithAutomaticOption"
+    [ "$output" = "5" ]
+}
+
+@test "configure_iterm2 re-applies on machines set up before the font and theme settings" {
+    stub_iterm2_tools
+    load_script
+    load_config
+
+    # A machine configured by the previous version of setup.sh
+    plutil -create xml1 "$PREFS_STORE"
+    /usr/libexec/PlistBuddy \
+        -c "Add ':MachineSetupColorPreset' string 'GitHub Dark Default'" \
+        -c "Add ':TabStyleWithAutomaticOption' integer 4" \
+        -c "Add ':New Bookmarks' array" \
+        -c "Add ':New Bookmarks:0' dict" \
+        -c "Add ':New Bookmarks:0:Name' string Default" \
+        -c "Add ':New Bookmarks:0:Guid' string GUID-A" \
+        -c "Add ':New Bookmarks:0:Normal Font' string 'MonaspaceNeon-Regular 12'" \
+        "$PREFS_STORE"
+
+    configure_iterm2
+
+    run prefs_value ":New Bookmarks:0:Normal Font"
+    [ "$output" = "MonaspaceNeonFrozen-Regular 14" ]
+    run prefs_value ":TabStyleWithAutomaticOption"
+    [ "$output" = "5" ]
+    run prefs_value ":MachineSetupColorPreset"
+    [ "$status" -ne 0 ]
+}
+
+@test "configure_iterm2 fails on an unknown theme without changing preferences" {
+    stub_iterm2_tools
+    load_script
+    ITERM2_COLOR_PRESET="GitHub Dark Default"
+    ITERM2_COLOR_SCHEME_FILE="$REPO_ROOT/iterm2/github-dark-default.itermcolors"
+    ITERM2_FONT="MonaspaceNeonFrozen-Regular 14"
+    ITERM2_THEME=bogus
+
+    run configure_iterm2
+    [ "$status" -eq 1 ]
+    [[ ! -f "$PREFS_STORE" ]]
+}
+
+# Stubs curl to "download" a small zip shaped like monaspace-frozen-v*.zip
+stub_frozen_download() {
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export CURL_LOG="$BATS_TEST_TMPDIR/curl.log"
+    export FROZEN_ZIP="$BATS_TEST_TMPDIR/frozen.zip"
+    mkdir -p "$BATS_TEST_TMPDIR/bin" "$BATS_TEST_TMPDIR/zip/Frozen Fonts/Monaspace Neon"
+    echo font > "$BATS_TEST_TMPDIR/zip/Frozen Fonts/Monaspace Neon/MonaspaceNeonFrozen-Regular.ttf"
+    echo font > "$BATS_TEST_TMPDIR/zip/Frozen Fonts/Monaspace Neon/MonaspaceNeonFrozen-Bold.ttf"
+    (cd "$BATS_TEST_TMPDIR/zip" && zip -qr "$FROZEN_ZIP" "Frozen Fonts")
+
+    cat > "$BATS_TEST_TMPDIR/bin/curl" <<'STUB'
+#!/bin/bash
+echo "$*" >> "$CURL_LOG"
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "-o" ]]; then cp "$FROZEN_ZIP" "$2"; exit 0; fi
+    shift
+done
+exit 1
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/curl"
+}
+
+@test "install_monaspace_frozen installs the pinned release once unless forced" {
+    stub_frozen_download
+    load_script
+    load_config
+
+    run install_monaspace_frozen
+    [ "$status" -eq 0 ]
+    [[ -f "$HOME/Library/Fonts/MonaspaceNeonFrozen-Regular.ttf" ]]
+    [[ -f "$HOME/Library/Fonts/MonaspaceNeonFrozen-Bold.ttf" ]]
+    [ "$(cat "$HOME/Library/Fonts/.monaspace-frozen-version")" = "1.400" ]
+
+    run grep -cF "releases/download/v1.400/monaspace-frozen-v1.400.zip" "$CURL_LOG"
+    [ "$output" = "1" ]
+
+    run install_monaspace_frozen
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$CURL_LOG" | tr -d ' ')" = "1" ]
+
+    FORCE_REINSTALL=true
+    run install_monaspace_frozen
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$CURL_LOG" | tr -d ' ')" = "2" ]
+}
+
+@test "install_monaspace_frozen fails when the download fails" {
+    stub_frozen_download
+    rm -f "$FROZEN_ZIP"
+    load_script
+    load_config
+
+    run install_monaspace_frozen
+    [ "$status" -eq 1 ]
+    [[ ! -f "$HOME/Library/Fonts/.monaspace-frozen-version" ]]
 }
 
 @test "configure_iterm2 refuses to change preferences while iTerm2 is running" {
@@ -302,7 +428,7 @@ STUB
 
     ensure_gh_scopes
 
-    run grep -F 'auth refresh -h github.com -s delete_repo,project [GH_TOKEN=unset GITHUB_TOKEN=unset]' "$GH_LOG"
+    run grep -F 'auth refresh -h github.com -s delete_repo,project,workflow [GH_TOKEN=unset GITHUB_TOKEN=unset]' "$GH_LOG"
     [ "$status" -eq 0 ]
 
     run grep -F 'env-token' "$GH_LOG"
@@ -311,7 +437,7 @@ STUB
 
 @test "ensure_gh_scopes does nothing when all scopes are granted" {
     stub_gh_auth
-    export GH_SCOPES="'codespace', 'delete_repo', 'project', 'repo'"
+    export GH_SCOPES="'codespace', 'delete_repo', 'project', 'repo', 'workflow'"
     load_script
     load_config
 
@@ -387,7 +513,7 @@ STUB
 
     run check_demo_launcher_prereqs
     [ "$status" -eq 1 ]
-    [[ "$output" == *"gh auth login -h github.com -s codespace,delete_repo,project"* ]]
+    [[ "$output" == *"gh auth login -h github.com -s codespace,delete_repo,project,workflow"* ]]
 }
 
 @test "check_demo_launcher_prereqs warns about missing scopes but continues" {
@@ -398,7 +524,7 @@ STUB
 
     run check_demo_launcher_prereqs
     [ "$status" -eq 0 ]
-    [[ "$output" == *"gh auth refresh -h github.com -s delete_repo,project"* ]]
+    [[ "$output" == *"gh auth refresh -h github.com -s delete_repo,project,workflow"* ]]
 }
 
 @test "sourcing install-demo-launcher.sh does not execute it" {

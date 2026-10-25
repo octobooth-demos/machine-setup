@@ -10,8 +10,8 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Installs and configures Visual Studio Code and Visual Studio Code Insiders.
 - Installs GitHub CLI, logs it in with the scopes the booth demos need, and installs a suite of GitHub CLI extensions.
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
-- Installs iTerm2 on macOS and sets its default profile to the GitHub Dark Default color scheme with Monaspace Neon.
-- Installs the SF Mono, Monaspace, and Mona Sans fonts on macOS.
+- Installs iTerm2 on macOS, sets its default profile to the GitHub Dark Default color scheme with Monaspace Neon Frozen 14, and switches it to the Minimal theme.
+- Installs the SF Mono, Monaspace (including the Frozen variants), and Mona Sans fonts on macOS.
 - Adds Google Chrome, the GitHub Copilot app, VS Code, VS Code Insiders, and iTerm2 to the macOS Dock and hides suggested and recent apps there.
 - Makes Google Chrome the default browser on macOS (via `defaultbrowser`), including when Chrome was already installed.
 - Configures VLC media player settings.
@@ -24,14 +24,16 @@ This repository contains setup scripts for configuring booth machines. The scrip
 `config.json` is the single source of truth for both setup scripts.
 
 - `shared`: settings used by both platforms, including VS Code extensions, GitHub CLI extensions, GitHub CLI auth scopes, demo sites, VLC settings, MCP servers, and repos to clone.
-- `mac`: Homebrew packages, editor binaries, iTerm2 theme settings, Dock apps, and post-install apps for `setup.sh`.
+- `mac`: Homebrew packages, editor binaries, iTerm2 theme settings, the Monaspace Frozen font version, Dock apps, and post-install apps for `setup.sh`.
 - `windows`: `winget` packages, editor commands, and post-install apps for `setup.ps1`.
 
-`mac.iterm2` controls the iTerm2 theme. `setup.sh` takes the colors from `color_scheme_file` (stored in [`iterm2/`](iterm2/README.md)), adds them to iTerm2's Color Presets as `color_preset`, and applies them and `font` to iTerm2's default profile. If iTerm2 has never been opened, it creates that "Default" profile. The `font-monaspace` cask provides Monaspace Neon (the iTerm2 font), and `font-mona-sans` installs Mona Sans. The `font-sf-mono` cask installs SF Mono from Apple and asks for an admin password. Quit iTerm2 before running setup, because iTerm2 overwrites preference changes when it quits. Once the theme is applied, later runs leave the profile alone unless `FORCE_REINSTALL=true`.
+`mac.iterm2` controls iTerm2's look. `setup.sh` takes the colors from `color_scheme_file` (stored in [`iterm2/`](iterm2/README.md)), adds them to iTerm2's Color Presets as `color_preset`, and applies them and `font` (a PostScript name and size, such as `MonaspaceNeonFrozen-Regular 14`) to iTerm2's default profile. If iTerm2 has never been opened, it creates that "Default" profile. `theme` sets **Settings > Appearance > General > Theme** through the `TabStyleWithAutomaticOption` preference. It can be `regular` (4), `minimal` (5), `compact` (6), `light` (0), `dark` (1), `light-high-contrast` (2), or `dark-high-contrast` (3), using the values from iTerm2's `iTermPreferencesTabStyle`. Quit iTerm2 before running setup, because iTerm2 overwrites preference changes when it quits. Once these settings are applied, later runs leave iTerm2 alone. They apply again if you change `color_preset`, `font`, or `theme` in `config.json`, or run with `FORCE_REINSTALL=true`. Machines set up before `font` and `theme` were tracked get the new settings on their next run.
+
+Fonts: the `font-monaspace` cask installs Monaspace, and `font-mona-sans` installs Mona Sans. The `font-sf-mono` cask installs SF Mono from Apple and asks for an admin password. The cask doesn't include Monaspace's "Frozen" fonts (such as Monaspace Neon Frozen, the iTerm2 font). So `setup.sh` downloads `monaspace-frozen-v<version>.zip` from the [githubnext/monaspace release](https://github.com/githubnext/monaspace/releases) pinned in `mac.monaspace_frozen_version`, and copies its `.ttf` files to `~/Library/Fonts`. Later runs skip this step unless the pinned version changes or `FORCE_REINSTALL=true`.
 
 `mac.dock_apps` lists app names (the `.app` bundle in `/Applications`, without `.app`) that `setup.sh` adds to the Dock with the `dockutil` formula. Apps already in the Dock are skipped, even with `FORCE_REINSTALL=true`, so reruns don't add duplicates. This includes Chrome when it was installed outside Homebrew and already pinned. Setup also turns off **Show suggested and recent apps in Dock** and restarts the Dock once if anything changed. It doesn't remove anything, so Downloads and Trash stay.
 
-`shared.gh_auth_scopes` lists the extra scopes the GitHub CLI login needs: `codespace` (the Tailspin Toys demo creates a Codespace), `delete_repo` (the Demo Launcher's cleanup deletes demo repos), and `project` (the Copilot Airways demo creates a GitHub Project, and cleanup deletes it). A new login requests them, and an existing login missing any of them is upgraded with `gh auth refresh`, which opens a browser to approve. Both scripts ignore `GH_TOKEN`/`GITHUB_TOKEN` for these steps so the stored login is the one updated. To do it by hand, see [GitHub CLI login](#github-cli-login).
+`shared.gh_auth_scopes` lists the extra scopes the GitHub CLI login needs: `codespace` (the Tailspin Toys demo creates a Codespace), `delete_repo` (the Demo Launcher's cleanup deletes demo repos), `project` (the Copilot Airways demo creates a GitHub Project, and cleanup deletes it), and `workflow` (demo repos include GitHub Actions workflows, and GitHub rejects pushes that add or change `.github/workflows` files without it). A new login requests them, and an existing login missing any of them is upgraded with `gh auth refresh`, which opens a browser to approve. Both scripts ignore `GH_TOKEN`/`GITHUB_TOKEN` for these steps so the stored login is the one updated. To do it by hand, see [GitHub CLI login](#github-cli-login).
 
 `pwa_sites` currently remains in the schema for future use, but PWA setup is intentionally disabled in both scripts until the booth workflow needs it again.
 
@@ -90,6 +92,29 @@ Clone this repo so you can update the scripts before each run. A ZIP download ne
 6. A launcher script that also opens the GitHub Copilot app is created on the Desktop.
 7. Store booth videos in `$HOME/Videos` so the launcher opens them in VLC.
 
+#### Re-running on a Mac that's already set up
+
+You can run `bash setup.sh` again on a configured Mac without resetting it. Steps that are already done are skipped, and changed settings in `config.json` are applied:
+
+- Homebrew packages that are already installed are left alone, and so are Chrome and the GitHub Copilot app when they're already in `/Applications`.
+- The Monaspace Frozen fonts are skipped when the pinned version is already installed.
+- iTerm2 is skipped when its color preset, font, and theme already match `config.json`.
+- Dock apps that are already in the Dock are skipped, and Chrome is skipped when it's already the default browser.
+- The GitHub CLI login only asks for missing scopes, and repos already in `~/repos` aren't cloned again.
+- The GitHub.com sign-in pause in Chrome still runs. Press Enter if you're already signed in.
+
+To redo everything, run `FORCE_REINSTALL=true bash setup.sh`. To redo just one step, clear its marker and rerun `bash setup.sh`:
+
+```bash
+# iTerm2 colors, font, and theme (quit iTerm2 first)
+defaults delete com.googlecode.iterm2 MachineSetupITerm2Settings
+
+# Monaspace Frozen fonts
+rm ~/Library/Fonts/.monaspace-frozen-version
+```
+
+`brew uninstall iterm2` doesn't redo the iTerm2 step. Uninstalling removes the app but keeps its preferences, including the marker, so setup reinstalls the app and still skips the theme. Clear the marker instead.
+
 ### Windows
 
 1. Open Windows Terminal as an administrator.
@@ -120,15 +145,16 @@ The setup scripts handle this for you, but check it on every booth machine (and 
 2. Add the extra scopes the demos need:
 
    ```bash
-   gh auth refresh -h github.com -s codespace,delete_repo,project
+   gh auth refresh -h github.com -s codespace,delete_repo,project,workflow
    ```
 
    - `codespace`: the Tailspin Toys demo creates a Codespace.
    - `delete_repo`: the Demo Launcher's cleanup deletes old demo repos.
    - `project`: the Copilot Airways demo creates a GitHub Project, and cleanup deletes it.
+   - `workflow`: demo repos include GitHub Actions workflows, and GitHub rejects pushes that add or change files in `.github/workflows` without this scope.
 
    `gh`'s default scopes (`repo`, `read:org`, `gist`) cover everything else.
-3. Check it with `gh auth status`. It should show the booth account as active, with `codespace`, `delete_repo`, and `project` in its token scopes.
+3. Check it with `gh auth status`. It should show the booth account as active, with `codespace`, `delete_repo`, `project`, and `workflow` in its token scopes.
 
 The booth account must be a member of the `octobooth-demos` org and allowed to create repositories there, because several demos create their repo in that org. It also needs a Copilot seat for the demos that use Copilot code review, assigning issues to Copilot, and Codespaces.
 
@@ -181,7 +207,7 @@ bash install-demo-launcher.sh
 
 It's safe to re-run. It:
 
-1. Checks for `gh`, `git`, and `jq` (`brew install gh jq`) and that the GitHub CLI is logged in. Logging in is interactive, so if it isn't, the script prints the `gh auth login` command to run and stops. It also warns if the login is missing the `codespace`/`delete_repo`/`project` scopes (`gh auth refresh -h github.com -s codespace,delete_repo,project`).
+1. Checks for `gh`, `git`, and `jq` (`brew install gh jq`) and that the GitHub CLI is logged in. Logging in is interactive, so if it isn't, the script prints the `gh auth login` command to run and stops. It also warns if the login is missing the `codespace`/`delete_repo`/`project`/`workflow` scopes (`gh auth refresh -h github.com -s codespace,delete_repo,project,workflow`).
 2. Clones `octobooth-demos/repo-setup-scripts` to `~/repos/repo-setup-scripts`, or pulls it if it's already there.
 3. Runs `install.sh` to (re)write the loader.
 

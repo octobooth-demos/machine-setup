@@ -159,6 +159,10 @@ load_config() {
     readonly ITERM2_COLOR_SCHEME_FILE
     ITERM2_FONT=$(jq -r '.mac.iterm2.font' "$CONFIG_FILE")
     readonly ITERM2_FONT
+    ITERM2_THEME=$(jq -r '.mac.iterm2.theme // "regular"' "$CONFIG_FILE")
+    readonly ITERM2_THEME
+    MONASPACE_FROZEN_VERSION=$(jq -r '.mac.monaspace_frozen_version // empty' "$CONFIG_FILE")
+    readonly MONASPACE_FROZEN_VERSION
 
     # Use read loop instead of mapfile for macOS bash 3.2 compatibility
     vs_code_extensions=()
@@ -223,18 +227,93 @@ font_installed() {
     [[ "$(osascript -l JavaScript -e "ObjC.import('AppKit'); \$.NSFont.fontWithNameSize('$1', 12).isNil()" 2>/dev/null)" == "false" ]]
 }
 
-# Applies the configured color scheme and font to iTerm2's default profile and
-# adds the scheme to Settings > Profiles > Colors > Color Presets
+# Installs the Monaspace "Frozen" fonts (fixed-feature TTFs, e.g.
+# MonaspaceNeonFrozen-Regular) from the pinned githubnext/monaspace release.
+# The font-monaspace cask doesn't include them.
+install_monaspace_frozen() {
+    local version="$MONASPACE_FROZEN_VERSION"
+    local fonts_dir="$HOME/Library/Fonts"
+    local marker="$fonts_dir/.monaspace-frozen-version"
+    local url="https://github.com/githubnext/monaspace/releases/download/v$version/monaspace-frozen-v$version.zip"
+
+    if [[ -z "$version" ]]; then
+        log_info "No Monaspace Frozen version configured, skipping..."
+        return 0
+    fi
+
+    if should_skip_installed && [[ "$(cat "$marker" 2>/dev/null)" == "$version" ]]; then
+        log_success "Already installed: Monaspace Frozen fonts v$version"
+        return 0
+    fi
+
+    log_info "Installing Monaspace Frozen fonts v$version..."
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+
+    if ! curl -fsSL -o "$tmp_dir/frozen.zip" "$url" || \
+       ! unzip -q "$tmp_dir/frozen.zip" -d "$tmp_dir/fonts"; then
+        log_error "Could not download Monaspace Frozen fonts from $url"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    mkdir -p "$fonts_dir"
+    local font count=0
+    while IFS= read -r -d '' font; do
+        cp -f "$font" "$fonts_dir/" && count=$((count + 1))
+    done < <(find "$tmp_dir/fonts" -name '*.ttf' -print0)
+    rm -rf "$tmp_dir"
+
+    if [[ $count -eq 0 ]]; then
+        log_error "No fonts found in $url"
+        return 1
+    fi
+
+    echo "$version" > "$marker"
+    log_success "Installed $count Monaspace Frozen fonts (v$version)"
+}
+
+# Prints iTerm2's TabStyleWithAutomaticOption value for a theme name
+# (Settings > Appearance > General > Theme), from iTermPreferencesTabStyle in
+# iTerm2's sources/Settings/iTermPreferences.h
+iterm2_theme_value() {
+    case "$1" in
+        light) echo 0 ;;
+        dark) echo 1 ;;
+        light-high-contrast) echo 2 ;;
+        dark-high-contrast) echo 3 ;;
+        regular) echo 4 ;;
+        minimal) echo 5 ;;
+        compact) echo 6 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Applies the configured color scheme, font, and theme to iTerm2 (color scheme
+# and font on the default profile; the scheme is also added to Settings >
+# Profiles > Colors > Color Presets)
 configure_iterm2() {
     local prefs_domain="com.googlecode.iterm2"
-    local sentinel_key="MachineSetupColorPreset"
+    local sentinel_key="MachineSetupITerm2Settings"
+    local legacy_sentinel_key="MachineSetupColorPreset"
+    local theme_key="TabStyleWithAutomaticOption"
     local plist_buddy="/usr/libexec/PlistBuddy"
     local preset_key=":Custom Color Presets:$ITERM2_COLOR_PRESET"
     local separate_colors_key="Use Separate Colors for Light and Dark Mode"
 
-    log_info "Configuring iTerm2 with the $ITERM2_COLOR_PRESET theme..."
+    local theme_value
+    if ! theme_value=$(iterm2_theme_value "$ITERM2_THEME"); then
+        log_error "Unknown iTerm2 theme '$ITERM2_THEME' in config.json"
+        return 1
+    fi
 
-    if should_skip_installed && [[ "$(defaults read "$prefs_domain" "$sentinel_key" 2>/dev/null)" == "$ITERM2_COLOR_PRESET" ]]; then
+    # Records every applied setting, so changing any of them in config.json
+    # re-applies them on machines that were already set up
+    local settings="$ITERM2_COLOR_PRESET|$ITERM2_FONT|$ITERM2_THEME"
+
+    log_info "Configuring iTerm2 with the $ITERM2_COLOR_PRESET colors..."
+
+    if should_skip_installed && [[ "$(defaults read "$prefs_domain" "$sentinel_key" 2>/dev/null)" == "$settings" ]]; then
         log_info "iTerm2 already configured, skipping..."
         return 0
     fi
@@ -290,7 +369,7 @@ configure_iterm2() {
     for key in "${color_keys[@]}" "$separate_colors_key" "Normal Font"; do
         "$plist_buddy" -c "Delete '$profile:$key'" "$prefs_file" &> /dev/null || true
     done
-    for key in ":Default Bookmark Guid" ":$sentinel_key" "$preset_key"; do
+    for key in ":Default Bookmark Guid" ":$sentinel_key" ":$legacy_sentinel_key" ":$theme_key" "$preset_key"; do
         "$plist_buddy" -c "Delete '$key'" "$prefs_file" &> /dev/null || true
     done
     "$plist_buddy" -c "Add ':Custom Color Presets' dict" "$prefs_file" &> /dev/null || true
@@ -304,7 +383,8 @@ configure_iterm2() {
             -c "Add ':Default Bookmark Guid' string $profile_guid" \
             -c "Add '$preset_key' dict" \
             -c "Merge '$ITERM2_COLOR_SCHEME_FILE' '$preset_key'" \
-            -c "Add ':$sentinel_key' string '$ITERM2_COLOR_PRESET'" \
+            -c "Add ':$theme_key' integer $theme_value" \
+            -c "Add ':$sentinel_key' string '$settings'" \
             "$prefs_file" || \
        ! defaults import "$prefs_domain" "$prefs_file"; then
         log_error "Could not update iTerm2 preferences"
@@ -317,7 +397,7 @@ configure_iterm2() {
     if ! font_installed "${ITERM2_FONT% *}"; then
         log_warn "Font ${ITERM2_FONT% *} is not installed - iTerm2 will fall back to its default font"
     fi
-    log_success "iTerm2 configured with the $ITERM2_COLOR_PRESET theme and $ITERM2_FONT"
+    log_success "iTerm2 configured with the $ITERM2_COLOR_PRESET colors, $ITERM2_FONT, and the $ITERM2_THEME theme"
 }
 
 # Adds the apps in config.json's mac.dock_apps to the Dock and turns off
@@ -624,7 +704,8 @@ gh_missing_scopes() {
 
 # Ensures the GitHub CLI login has the configured scopes (codespace for
 # Codespace demos, delete_repo for the Demo Launcher's cleanup, project for
-# the Copilot Airways demo's GitHub Project and its cleanup)
+# the Copilot Airways demo's GitHub Project and its cleanup, workflow for
+# pushing .github/workflows files to demo repos)
 ensure_gh_scopes() {
     if [[ ${#gh_auth_scopes[@]} -eq 0 ]]; then
         return 0
@@ -857,6 +938,7 @@ main() {
     # Install packages
     install_packages
     configure_vlc
+    try_install "Monaspace Frozen fonts" install_monaspace_frozen
     try_install "iTerm2 theme: $ITERM2_COLOR_PRESET" configure_iterm2
     try_install "Dock apps and settings" configure_dock
 
