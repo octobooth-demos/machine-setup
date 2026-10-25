@@ -541,3 +541,51 @@ STUB
     [ "$status" -eq 1 ]
     [[ "$output" == *"System Settings"* ]]
 }
+
+# Stubs dockutil with a Dock backed by a file of app paths
+stub_dockutil() {
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export DOCK_FILE="$BATS_TEST_TMPDIR/dock"
+    export ITERM2_APP_PATH="$BATS_TEST_TMPDIR/Applications/iTerm.app"
+    mkdir -p "$BATS_TEST_TMPDIR/bin" "$ITERM2_APP_PATH"
+    : > "$DOCK_FILE"
+
+    cat > "$BATS_TEST_TMPDIR/bin/dockutil" <<'STUB'
+#!/bin/bash
+case "$1" in
+    --find) grep -q "/$2.app$" "$DOCK_FILE" ;;
+    --add) echo "$2" >> "$DOCK_FILE" ;;
+esac
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/dockutil"
+}
+
+@test "config installs dockutil on macOS" {
+    run jq -e '.mac.packages.formulas | index("dockutil")' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+}
+
+@test "add_iterm2_to_dock adds iTerm2 once" {
+    stub_dockutil
+    load_script
+
+    run add_iterm2_to_dock
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"iTerm2 added to the Dock"* ]]
+
+    run add_iterm2_to_dock
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already in the Dock"* ]]
+
+    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "1" ]
+}
+
+@test "add_iterm2_to_dock skips when iTerm2 is not installed" {
+    stub_dockutil
+    rm -rf "$ITERM2_APP_PATH"
+    load_script
+
+    run add_iterm2_to_dock
+    [ "$status" -eq 1 ]
+    [ ! -s "$DOCK_FILE" ]
+}

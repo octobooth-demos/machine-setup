@@ -80,7 +80,8 @@
         "gh",
         "python@3.14",
         "nvm",
-        "defaultbrowser"
+        "defaultbrowser",
+        "dockutil"
       ]
     },
     "editors": [

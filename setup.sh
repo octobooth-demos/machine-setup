@@ -317,6 +317,35 @@ configure_iterm2() {
     log_success "iTerm2 configured with the $ITERM2_COLOR_PRESET theme and $ITERM2_FONT"
 }
 
+# Adds iTerm2 to the Dock if it isn't already there. Skips even when
+# FORCE_REINSTALL=true, because adding it again would create a duplicate icon.
+add_iterm2_to_dock() {
+    local app_path="${ITERM2_APP_PATH:-/Applications/iTerm.app}"
+
+    if ! command -v dockutil &> /dev/null; then
+        log_warn "dockutil is not installed - drag iTerm2 to the Dock manually"
+        return 1
+    fi
+
+    if [[ ! -d "$app_path" ]]; then
+        log_warn "iTerm2 not found at $app_path - skipping Dock setup"
+        return 1
+    fi
+
+    if dockutil --find "iTerm" &> /dev/null; then
+        log_success "iTerm2 is already in the Dock"
+        return 0
+    fi
+
+    log_info "Adding iTerm2 to the Dock..."
+    if ! dockutil --add "$app_path"; then
+        log_error "Could not add iTerm2 to the Dock"
+        return 1
+    fi
+
+    log_success "iTerm2 added to the Dock"
+}
+
 # Prints the app bundle for casks that are often installed outside brew
 cask_app_path() {
     case "$1" in
@@ -806,6 +835,7 @@ main() {
     install_packages
     configure_vlc
     try_install "iTerm2 theme: $ITERM2_COLOR_PRESET" configure_iterm2
+    try_install "iTerm2 in Dock" add_iterm2_to_dock
 
     # Launch post-install apps (e.g., Docker)
     launch_post_install_apps
