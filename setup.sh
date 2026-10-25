@@ -170,6 +170,9 @@ load_config() {
     brew_casks=()
     while IFS= read -r line; do brew_casks+=("$line"); done < <(jq -r '.mac.packages.casks[]' "$CONFIG_FILE")
 
+    dock_apps=()
+    while IFS= read -r line; do dock_apps+=("$line"); done < <(jq -r '.mac.dock_apps // [] | .[]' "$CONFIG_FILE")
+
     brew_formulas=()
     while IFS= read -r line; do brew_formulas+=("$line"); done < <(jq -r '.mac.packages.formulas[]' "$CONFIG_FILE")
 
@@ -315,6 +318,55 @@ configure_iterm2() {
         log_warn "Font ${ITERM2_FONT% *} is not installed - iTerm2 will fall back to its default font"
     fi
     log_success "iTerm2 configured with the $ITERM2_COLOR_PRESET theme and $ITERM2_FONT"
+}
+
+# Adds the apps in config.json's mac.dock_apps to the Dock and turns off
+# "Show suggested and recent apps in Dock". Leaves everything else (including
+# Downloads and Trash) alone. Apps already in the Dock are skipped even when
+# FORCE_REINSTALL=true, because adding them again would create duplicate icons.
+configure_dock() {
+    local apps_dir="${APPLICATIONS_DIR:-/Applications}"
+    local dock_changed=false
+    local failed=false
+
+    if ! command -v dockutil &> /dev/null; then
+        log_warn "dockutil is not installed - add apps to the Dock manually"
+        failed=true
+    else
+        local app app_path
+        for app in "${dock_apps[@]}"; do
+            app_path="$apps_dir/$app.app"
+            if [[ ! -d "$app_path" ]]; then
+                log_warn "$app not found at $app_path - skipping Dock icon"
+                failed=true
+            elif dockutil --find "$app" &> /dev/null; then
+                log_success "$app is already in the Dock"
+            elif dockutil --add "$app_path" --no-restart &> /dev/null; then
+                log_success "Added $app to the Dock"
+                dock_changed=true
+            else
+                log_error "Could not add $app to the Dock"
+                failed=true
+            fi
+        done
+    fi
+
+    if [[ "$(defaults read com.apple.dock show-recents 2>/dev/null)" == "0" ]]; then
+        log_success "Suggested and recent apps are already hidden in the Dock"
+    elif defaults write com.apple.dock show-recents -bool false; then
+        log_success "Hid suggested and recent apps in the Dock"
+        dock_changed=true
+    else
+        log_error "Could not hide suggested and recent apps in the Dock"
+        failed=true
+    fi
+
+    if [[ "$dock_changed" == "true" ]]; then
+        log_info "Restarting the Dock..."
+        killall Dock 2>/dev/null || true
+    fi
+
+    [[ "$failed" == "false" ]]
 }
 
 # Prints the app bundle for casks that are often installed outside brew
@@ -806,6 +858,7 @@ main() {
     install_packages
     configure_vlc
     try_install "iTerm2 theme: $ITERM2_COLOR_PRESET" configure_iterm2
+    try_install "Dock apps and settings" configure_dock
 
     # Launch post-install apps (e.g., Docker)
     launch_post_install_apps

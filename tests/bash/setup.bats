@@ -541,3 +541,131 @@ STUB
     [ "$status" -eq 1 ]
     [[ "$output" == *"System Settings"* ]]
 }
+
+# Stubs dockutil, defaults, and killall with a Dock backed by files, and
+# creates fake app bundles for every app in mac.dock_apps
+stub_dock() {
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export DOCK_FILE="$BATS_TEST_TMPDIR/dock"
+    export DOCK_LOG="$BATS_TEST_TMPDIR/dock.log"
+    export SHOW_RECENTS_FILE="$BATS_TEST_TMPDIR/show-recents"
+    export APPLICATIONS_DIR="$BATS_TEST_TMPDIR/Applications"
+    mkdir -p "$BATS_TEST_TMPDIR/bin" "$APPLICATIONS_DIR"
+    : > "$DOCK_FILE"
+    rm -f "$SHOW_RECENTS_FILE"
+
+    while IFS= read -r app; do mkdir -p "$APPLICATIONS_DIR/$app.app"; done \
+        < <(jq -r '.mac.dock_apps[]' "$REPO_ROOT/config.json")
+
+    cat > "$BATS_TEST_TMPDIR/bin/dockutil" <<'STUB'
+#!/bin/bash
+echo "dockutil $*" >> "$DOCK_LOG"
+case "$1" in
+    --find) grep -qxF "$2" "$DOCK_FILE" ;;
+    --add) [[ "$3" == "--no-restart" ]] || exit 9; basename "$2" .app >> "$DOCK_FILE" ;;
+esac
+STUB
+    cat > "$BATS_TEST_TMPDIR/bin/defaults" <<'STUB'
+#!/bin/bash
+echo "defaults $*" >> "$DOCK_LOG"
+case "$1" in
+    read) [[ -f "$SHOW_RECENTS_FILE" ]] && cat "$SHOW_RECENTS_FILE" ;;
+    write) [[ "${DEFAULTS_WRITE_FAILS:-}" == "true" ]] && exit 1; echo 0 > "$SHOW_RECENTS_FILE" ;;
+esac
+STUB
+    cat > "$BATS_TEST_TMPDIR/bin/killall" <<'STUB'
+#!/bin/bash
+echo "killall $*" >> "$DOCK_LOG"
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/dockutil" "$BATS_TEST_TMPDIR/bin/defaults" "$BATS_TEST_TMPDIR/bin/killall"
+}
+
+@test "config installs dockutil and lists the Dock apps" {
+    run jq -e '.mac.packages.formulas | index("dockutil")' "$REPO_ROOT/config.json"
+    [ "$status" -eq 0 ]
+
+    run jq -r '.mac.dock_apps | join(",")' "$REPO_ROOT/config.json"
+    [ "$output" = "Google Chrome,GitHub Copilot,Visual Studio Code,Visual Studio Code - Insiders,iTerm" ]
+}
+
+@test "configure_dock adds apps, hides recents, and restarts the Dock once" {
+    stub_dock
+    load_script
+    load_config
+
+    run configure_dock
+    [ "$status" -eq 0 ]
+
+    run cat "$DOCK_FILE"
+    [ "$output" = "$(jq -r '.mac.dock_apps[]' "$REPO_ROOT/config.json")" ]
+    [ "$(cat "$SHOW_RECENTS_FILE")" = "0" ]
+    [ "$(grep -c '^killall Dock$' "$DOCK_LOG")" = "1" ]
+
+    run grep -E 'dockutil --remove|show-persistent|downloads|trash' "$DOCK_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "configure_dock is idempotent and doesn't restart the Dock when nothing changes" {
+    stub_dock
+    load_script
+    load_config
+
+    configure_dock
+    : > "$DOCK_LOG"
+
+    run configure_dock
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "5" ]
+
+    run grep -E 'dockutil --add|defaults write|killall' "$DOCK_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "configure_dock fails when hiding recent apps fails" {
+    stub_dock
+    jq -r '.mac.dock_apps[]' "$REPO_ROOT/config.json" > "$DOCK_FILE"
+    export DEFAULTS_WRITE_FAILS=true
+    load_script
+    load_config
+
+    run configure_dock
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Could not hide suggested and recent apps in the Dock"* ]]
+    [[ "$output" != *"Hid suggested and recent apps"* ]]
+    [ ! -f "$SHOW_RECENTS_FILE" ]
+
+    run grep -E 'killall' "$DOCK_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "configure_dock reports a missing app but still adds the others" {
+    stub_dock
+    rm -rf "$APPLICATIONS_DIR/iTerm.app"
+    load_script
+    load_config
+
+    run configure_dock
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"iTerm not found"* ]]
+
+    run grep -cxF "iTerm" "$DOCK_FILE"
+    [ "$output" = "0" ]
+    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "4" ]
+}
+
+@test "configure_dock doesn't duplicate Chrome when it's already in the Dock" {
+    stub_dock
+    echo "Google Chrome" > "$DOCK_FILE"
+    load_script
+    load_config
+
+    run configure_dock
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Google Chrome is already in the Dock"* ]]
+
+    run grep -cxF "Google Chrome" "$DOCK_FILE"
+    [ "$output" = "1" ]
+
+    run grep -F 'dockutil --add' "$DOCK_LOG"
+    [[ "$output" != *"Google Chrome"* ]]
+}
