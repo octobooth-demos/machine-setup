@@ -100,8 +100,14 @@
       }
     ],
     "iterm2": {
-      "color_preset": "GitHub Dark Default",
-      "color_scheme_file": "iterm2/github-dark-default.itermcolors",
+      "light": {
+        "color_preset": "GitHub Light Default",
+        "color_scheme_file": "iterm2/github-light-default.itermcolors"
+      },
+      "dark": {
+        "color_preset": "GitHub Dark Default",
+        "color_scheme_file": "iterm2/github-dark-default.itermcolors"
+      },
       "font": "MonaspaceNeonFrozen-Regular 14",
       "theme": "minimal",
       "ligatures": true,

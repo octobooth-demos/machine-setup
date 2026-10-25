@@ -2,11 +2,11 @@
 
 `setup.sh` applies these files to iTerm2 on macOS. See `mac.iterm2` in [`config.json`](../config.json).
 
-## `github-dark-default.itermcolors`
+## `github-light-default.itermcolors` and `github-dark-default.itermcolors`
 
-The GitHub Dark Default color scheme. Its colors follow GitHub's "Dark Default" theme.
+The GitHub Light Default and GitHub Dark Default color schemes. Their colors follow GitHub's "Light Default" and "Dark Default" themes. iTerm2 uses the light scheme when macOS is in light mode and the dark scheme in dark mode.
 
-Copied without changes from [mbadolato/iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes) at commit [`61c5479`](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/61c5479c08fc700a7866cdd18813cde19680384b/schemes/GitHub%20Dark%20Default.itermcolors), which is distributed under the following license:
+Both are copied without changes from [mbadolato/iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes) at commit `61c5479` ([GitHub Light Default](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/61c5479c08fc700a7866cdd18813cde19680384b/schemes/GitHub%20Light%20Default.itermcolors), [GitHub Dark Default](https://github.com/mbadolato/iTerm2-Color-Schemes/blob/61c5479c08fc700a7866cdd18813cde19680384b/schemes/GitHub%20Dark%20Default.itermcolors)), which is distributed under the following license:
 
 ```text
 MIT License
