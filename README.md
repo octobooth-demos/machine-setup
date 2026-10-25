@@ -92,6 +92,29 @@ Clone this repo so you can update the scripts before each run. A ZIP download ne
 6. A launcher script that also opens the GitHub Copilot app is created on the Desktop.
 7. Store booth videos in `$HOME/Videos` so the launcher opens them in VLC.
 
+#### Re-running on a Mac that's already set up
+
+You can run `bash setup.sh` again on a configured Mac without resetting it. Steps that are already done are skipped, and changed settings in `config.json` are applied:
+
+- Homebrew packages that are already installed are left alone, and so are Chrome and the GitHub Copilot app when they're already in `/Applications`.
+- The Monaspace Frozen fonts are skipped when the pinned version is already installed.
+- iTerm2 is skipped when its color preset, font, and theme already match `config.json`.
+- Dock apps that are already in the Dock are skipped, and Chrome is skipped when it's already the default browser.
+- The GitHub CLI login only asks for missing scopes, and repos already in `~/repos` aren't cloned again.
+- The GitHub.com sign-in pause in Chrome still runs. Press Enter if you're already signed in.
+
+To redo everything, run `FORCE_REINSTALL=true bash setup.sh`. To redo just one step, clear its marker and rerun `bash setup.sh`:
+
+```bash
+# iTerm2 colors, font, and theme (quit iTerm2 first)
+defaults delete com.googlecode.iterm2 MachineSetupITerm2Settings
+
+# Monaspace Frozen fonts
+rm ~/Library/Fonts/.monaspace-frozen-version
+```
+
+`brew uninstall iterm2` doesn't redo the iTerm2 step. Uninstalling removes the app but keeps its preferences, including the marker, so setup reinstalls the app and still skips the theme. Clear the marker instead.
+
 ### Windows
 
 1. Open Windows Terminal as an administrator.
