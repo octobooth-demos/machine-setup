@@ -570,7 +570,7 @@ STUB
 echo "defaults $*" >> "$DOCK_LOG"
 case "$1" in
     read) [[ -f "$SHOW_RECENTS_FILE" ]] && cat "$SHOW_RECENTS_FILE" ;;
-    write) echo 0 > "$SHOW_RECENTS_FILE" ;;
+    write) [[ "${DEFAULTS_WRITE_FAILS:-}" == "true" ]] && exit 1; echo 0 > "$SHOW_RECENTS_FILE" ;;
 esac
 STUB
     cat > "$BATS_TEST_TMPDIR/bin/killall" <<'STUB'
@@ -618,6 +618,23 @@ STUB
     [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "5" ]
 
     run grep -E 'dockutil --add|defaults write|killall' "$DOCK_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "configure_dock fails when hiding recent apps fails" {
+    stub_dock
+    jq -r '.mac.dock_apps[]' "$REPO_ROOT/config.json" > "$DOCK_FILE"
+    export DEFAULTS_WRITE_FAILS=true
+    load_script
+    load_config
+
+    run configure_dock
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Could not hide suggested and recent apps in the Dock"* ]]
+    [[ "$output" != *"Hid suggested and recent apps"* ]]
+    [ ! -f "$SHOW_RECENTS_FILE" ]
+
+    run grep -E 'killall' "$DOCK_LOG"
     [ "$status" -ne 0 ]
 }
 

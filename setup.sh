@@ -353,10 +353,12 @@ configure_dock() {
 
     if [[ "$(defaults read com.apple.dock show-recents 2>/dev/null)" == "0" ]]; then
         log_success "Suggested and recent apps are already hidden in the Dock"
-    else
-        defaults write com.apple.dock show-recents -bool false
+    elif defaults write com.apple.dock show-recents -bool false; then
         log_success "Hid suggested and recent apps in the Dock"
         dock_changed=true
+    else
+        log_error "Could not hide suggested and recent apps in the Dock"
+        failed=true
     fi
 
     if [[ "$dock_changed" == "true" ]]; then
