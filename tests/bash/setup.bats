@@ -302,7 +302,7 @@ STUB
 
     ensure_gh_scopes
 
-    run grep -F 'auth refresh -h github.com -s delete_repo,project [GH_TOKEN=unset GITHUB_TOKEN=unset]' "$GH_LOG"
+    run grep -F 'auth refresh -h github.com -s delete_repo,project,workflow [GH_TOKEN=unset GITHUB_TOKEN=unset]' "$GH_LOG"
     [ "$status" -eq 0 ]
 
     run grep -F 'env-token' "$GH_LOG"
@@ -311,7 +311,7 @@ STUB
 
 @test "ensure_gh_scopes does nothing when all scopes are granted" {
     stub_gh_auth
-    export GH_SCOPES="'codespace', 'delete_repo', 'project', 'repo'"
+    export GH_SCOPES="'codespace', 'delete_repo', 'project', 'repo', 'workflow'"
     load_script
     load_config
 
@@ -387,7 +387,7 @@ STUB
 
     run check_demo_launcher_prereqs
     [ "$status" -eq 1 ]
-    [[ "$output" == *"gh auth login -h github.com -s codespace,delete_repo,project"* ]]
+    [[ "$output" == *"gh auth login -h github.com -s codespace,delete_repo,project,workflow"* ]]
 }
 
 @test "check_demo_launcher_prereqs warns about missing scopes but continues" {
@@ -398,7 +398,7 @@ STUB
 
     run check_demo_launcher_prereqs
     [ "$status" -eq 0 ]
-    [[ "$output" == *"gh auth refresh -h github.com -s delete_repo,project"* ]]
+    [[ "$output" == *"gh auth refresh -h github.com -s delete_repo,project,workflow"* ]]
 }
 
 @test "sourcing install-demo-launcher.sh does not execute it" {

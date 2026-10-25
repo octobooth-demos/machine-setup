@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="23" errors="0" failures="2" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-10-24" time="18:33:32">
+  <environment machine-name="filmgirl-gh" cwd="/Users/filmgirl/Developer/copilot-worktrees/machine-setup/filmgirl-automatic-happiness" clr-version="10.0.13" nunit-version="2.5.8.0" user="filmgirl" platform="Darwin" user-domain="" os-version="27.0.0" />
+  <culture-info current-culture="en-US" current-uiculture="en-US" />
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Failure" success="False" time="0.8089" asserts="0" description="Pester">
+    <results>
+      <test-suite type="TestFixture" name="/Users/filmgirl/Developer/copilot-worktrees/machine-setup/filmgirl-automatic-happiness/tests/powershell/Setup.Tests.ps1" executed="True" result="Failure" success="False" time="0.8089" asserts="0" description="/Users/filmgirl/Developer/copilot-worktrees/machine-setup/filmgirl-automatic-happiness/tests/powershell/Setup.Tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="setup.ps1" executed="True" result="Failure" success="False" time="0.6855" asserts="0" description="setup.ps1">
+            <results>
+              <test-suite type="TestFixture" name="setup.ps1.Invoke-Main authentication modes" executed="True" result="Success" success="True" time="0.5809" asserts="0" description="setup.ps1.Invoke-Main authentication modes">
+                <results>
+                  <test-case description="uses active credentials even when an inactive account is expired" name="setup.ps1.Invoke-Main authentication modes.uses active credentials even when an inactive account is expired" time="0.0891" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="defers extensions and clones when credentials are unavailable" name="setup.ps1.Invoke-Main authentication modes.defers extensions and clones when credentials are unavailable" time="0.0572" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="defers extensions and clones when gh is unavailable" name="setup.ps1.Invoke-Main authentication modes.defers extensions and clones when gh is unavailable" time="0.0492" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves interactive authentication and cloning by default" name="setup.ps1.Invoke-Main authentication modes.preserves interactive authentication and cloning by default" time="0.0478" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-case description="Set-EditorTheme merges the configured theme into settings.json" name="setup.ps1.Set-EditorTheme merges the configured theme into settings.json" time="0.0742" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Register-MCPServers writes local and http server entries" name="setup.ps1.Register-MCPServers writes local and http server entries" time="0.0214" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Register-MCPServers initializes mcpServers on an existing config that lacks it" name="setup.ps1.Register-MCPServers initializes mcpServers on an existing config that lacks it" time="0.0353" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="New-DemoLoader writes the launcher script to the Desktop path" name="setup.ps1.New-DemoLoader writes the launcher script to the Desktop path" time="0.0201" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Invoke-SafeInstall records native command failures" name="setup.ps1.Invoke-SafeInstall records native command failures" time="0.0312" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Install-WingetPackage explicitly selects the winget source" name="setup.ps1.Install-WingetPackage explicitly selects the winget source" time="0.0177" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Install-WingetPackage treats &quot;already installed&quot; exit code as success" name="setup.ps1.Install-WingetPackage treats &quot;already installed&quot; exit code as success" time="0.0028" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Install-WingetPackage treats reboot-required exit code as success" name="setup.ps1.Install-WingetPackage treats reboot-required exit code as success" time="0.0022" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Install-WingetPackage records genuine winget failures" name="setup.ps1.Install-WingetPackage records genuine winget failures" time="0.0041" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Install-GHExtension treats an already-installed extension as success" name="setup.ps1.Install-GHExtension treats an already-installed extension as success" time="0.0038" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Install-GHExtension skips extensions unsupported on the current architecture" name="setup.ps1.Install-GHExtension skips extensions unsupported on the current architecture" time="0.0036" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Install-GHExtension records genuine extension failures" name="setup.ps1.Install-GHExtension records genuine extension failures" time="0.0139" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Get-EdgePath falls back to command lookup when Edge is not in Program Files" name="setup.ps1.Get-EdgePath falls back to command lookup when Edge is not in Program Files" time="0.0264" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>ParameterBindingValidationException: Cannot bind argument to parameter 'Path' because it is null.</message>
+                  <stack-trace>at Get-EdgePath, /Users/filmgirl/Developer/copilot-worktrees/machine-setup/filmgirl-automatic-happiness/setup.ps1:412
+at &lt;ScriptBlock&gt;, /Users/filmgirl/Developer/copilot-worktrees/machine-setup/filmgirl-automatic-happiness/tests/powershell/Setup.Tests.ps1:168</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="Get-EdgePath returns the full path when a single Program Files match exists" name="setup.ps1.Get-EdgePath returns the full path when a single Program Files match exists" time="0.0024" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>ParameterBindingValidationException: Cannot bind argument to parameter 'Path' because it is null.</message>
+                  <stack-trace>at &lt;ScriptBlock&gt;, /Users/filmgirl/Developer/copilot-worktrees/machine-setup/filmgirl-automatic-happiness/tests/powershell/Setup.Tests.ps1:172</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="Copy-Repos skips repositories that already exist" name="setup.ps1.Copy-Repos skips repositories that already exist" time="0.0203" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="config installs the GitHub Copilot app" name="setup.ps1.config installs the GitHub Copilot app" time="0.0038" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Copy-Repos defers new clones without recording failures when requested" name="setup.ps1.Copy-Repos defers new clones without recording failures when requested" time="0.0403" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Confirm-GHScope refreshes only missing scopes using the stored login" name="setup.ps1.Confirm-GHScope refreshes only missing scopes using the stored login" time="0.0135" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Confirm-GHScope does nothing when all scopes are granted" name="setup.ps1.Confirm-GHScope does nothing when all scopes are granted" time="0.0123" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>

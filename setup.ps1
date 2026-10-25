@@ -362,7 +362,8 @@ function Get-GHMissingScope {
 
 # Ensures the GitHub CLI login has the configured scopes (codespace for
 # Codespace demos, delete_repo for the Demo Launcher's cleanup, project for
-# the Copilot Airways demo's GitHub Project and its cleanup)
+# the Copilot Airways demo's GitHub Project and its cleanup, workflow for
+# pushing .github/workflows files to demo repos)
 function Confirm-GHScope {
     $missing = @(Get-GHMissingScope)
     if ($missing.Count -eq 0) {

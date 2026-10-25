@@ -202,6 +202,7 @@ Describe 'setup.ps1' {
         $script:config.shared.gh_auth_scopes | Should -Contain 'codespace'
         $script:config.shared.gh_auth_scopes | Should -Contain 'delete_repo'
         $script:config.shared.gh_auth_scopes | Should -Contain 'project'
+        $script:config.shared.gh_auth_scopes | Should -Contain 'workflow'
     }
 
     It 'Copy-Repos defers new clones without recording failures when requested' {
@@ -313,7 +314,7 @@ Describe 'setup.ps1' {
         try {
             Confirm-GHScope
             $log = Get-Content -Path $ghLog
-            $log | Should -Contain 'auth refresh -h github.com -s delete_repo,project [GH_TOKEN=]'
+            $log | Should -Contain 'auth refresh -h github.com -s delete_repo,project,workflow [GH_TOKEN=]'
             $env:GH_TOKEN | Should -Be 'env-token'
             $script:failedItems | Should -BeNullOrEmpty
         }
@@ -326,7 +327,7 @@ Describe 'setup.ps1' {
         $ghLog = Join-Path $TestDrive 'gh-scope-noop.log'
         function global:gh {
             Add-Content -Path $ghLog -Value ($args -join ' ')
-            Write-Output "  - Token scopes: 'codespace', 'delete_repo', 'project', 'repo'"
+            Write-Output "  - Token scopes: 'codespace', 'delete_repo', 'project', 'repo', 'workflow'"
             $global:LASTEXITCODE = 0
         }
 
