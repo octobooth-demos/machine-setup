@@ -140,8 +140,17 @@ red_component() {
     run jq -e '.mac.packages.casks | index("iterm2") and index("font-sf-mono") and index("font-monaspace") and index("font-mona-sans")' "$REPO_ROOT/config.json"
     [ "$status" -eq 0 ]
 
-    run plutil -lint -s "$REPO_ROOT/$(jq -r '.mac.iterm2.color_scheme_file' "$REPO_ROOT/config.json")"
-    [ "$status" -eq 0 ]
+    local mode
+    for mode in light dark; do
+        run plutil -lint -s "$REPO_ROOT/$(jq -r ".mac.iterm2.$mode.color_scheme_file" "$REPO_ROOT/config.json")"
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "config follows macOS appearance with GitHub Light and Dark Default" {
+    run jq -r '.mac.iterm2.light.color_preset, .mac.iterm2.dark.color_preset' "$REPO_ROOT/config.json"
+    [ "${lines[0]}" = "GitHub Light Default" ]
+    [ "${lines[1]}" = "GitHub Dark Default" ]
 }
 
 @test "configure_iterm2 creates a themed Default profile on a fresh install" {
@@ -162,14 +171,26 @@ red_component() {
     run red_component ":New Bookmarks:0:Background Color"
     [ "$output" = "0.0510" ]
 
+    run red_component ":New Bookmarks:0:Background Color (Light)"
+    [ "$output" = "1.0000" ]
+
+    run red_component ":New Bookmarks:0:Background Color (Dark)"
+    [ "$output" = "0.0510" ]
+
+    run red_component ":New Bookmarks:0:Foreground Color (Light)"
+    [ "$output" = "0.1216" ]
+
     run prefs_value ":New Bookmarks:0:Use Separate Colors for Light and Dark Mode"
-    [ "$output" = "false" ]
+    [ "$output" = "true" ]
 
     run prefs_value ":New Bookmarks:0:Normal Font"
     [ "$output" = "MonaspaceNeonFrozen-Regular 14" ]
 
     run red_component ":Custom Color Presets:GitHub Dark Default:Background Color"
     [ "$output" = "0.0510" ]
+
+    run red_component ":Custom Color Presets:GitHub Light Default:Background Color"
+    [ "$output" = "1.0000" ]
 }
 
 @test "configure_iterm2 applies theme to the existing default profile only" {
@@ -189,9 +210,11 @@ red_component() {
     /usr/libexec/PlistBuddy \
         -c "Add ':New Bookmarks:1:Columns' integer 120" \
         -c "Add ':New Bookmarks:1:Normal Font' string 'Monaco 12'" \
-        -c "Add ':New Bookmarks:1:Use Separate Colors for Light and Dark Mode' bool true" \
+        -c "Add ':New Bookmarks:1:Use Separate Colors for Light and Dark Mode' bool false" \
         -c "Add ':New Bookmarks:1:Background Color' dict" \
         -c "Add ':New Bookmarks:1:Background Color:Red Component' real 0.98" \
+        -c "Add ':New Bookmarks:1:Background Color (Light)' dict" \
+        -c "Add ':New Bookmarks:1:Background Color (Light):Red Component' real 0.5" \
         -c "Add ':Custom Color Presets' dict" \
         -c "Add ':Custom Color Presets:Mine' dict" \
         "$PREFS_STORE"
@@ -206,8 +229,11 @@ red_component() {
     run prefs_value ":New Bookmarks:1:Normal Font"
     [ "$output" = "MonaspaceNeonFrozen-Regular 14" ]
 
+    run red_component ":New Bookmarks:1:Background Color (Light)"
+    [ "$output" = "1.0000" ]
+
     run prefs_value ":New Bookmarks:1:Use Separate Colors for Light and Dark Mode"
-    [ "$output" = "false" ]
+    [ "$output" = "true" ]
 
     run prefs_value ":New Bookmarks:1:Columns"
     [ "$output" = "120" ]
@@ -302,8 +328,10 @@ red_component() {
 @test "configure_iterm2 fails on an unknown theme without changing preferences" {
     stub_iterm2_tools
     load_script
-    ITERM2_COLOR_PRESET="GitHub Dark Default"
-    ITERM2_COLOR_SCHEME_FILE="$REPO_ROOT/iterm2/github-dark-default.itermcolors"
+    ITERM2_LIGHT_PRESET="GitHub Light Default"
+    ITERM2_LIGHT_SCHEME_FILE="$REPO_ROOT/iterm2/github-light-default.itermcolors"
+    ITERM2_DARK_PRESET="GitHub Dark Default"
+    ITERM2_DARK_SCHEME_FILE="$REPO_ROOT/iterm2/github-dark-default.itermcolors"
     ITERM2_FONT="MonaspaceNeonFrozen-Regular 14"
     ITERM2_THEME=bogus
 
@@ -367,6 +395,95 @@ STUB
     run install_monaspace_frozen
     [ "$status" -eq 1 ]
     [[ ! -f "$HOME/Library/Fonts/.monaspace-frozen-version" ]]
+}
+
+@test "config turns on ligatures and turns off thin strokes in iTerm2" {
+    run jq -r '.mac.iterm2.ligatures, .mac.iterm2.thin_strokes' "$REPO_ROOT/config.json"
+    [ "${lines[0]}" = "true" ]
+    [ "${lines[1]}" = "never" ]
+}
+
+@test "iterm2_thin_strokes_value matches iTerm2's thin strokes values" {
+    load_script
+
+    [ "$(iterm2_thin_strokes_value never)" = "0" ]
+    [ "$(iterm2_thin_strokes_value always)" = "3" ]
+    [ "$(iterm2_thin_strokes_value retina-only)" = "4" ]
+
+    run iterm2_thin_strokes_value bogus
+    [ "$status" -ne 0 ]
+}
+
+@test "configure_iterm2 sets ligatures and thin strokes on the default profile" {
+    stub_iterm2_tools
+    load_script
+    load_config
+
+    configure_iterm2
+
+    run prefs_value ":New Bookmarks:0:ASCII Ligatures"
+    [ "$output" = "true" ]
+    run prefs_value ":New Bookmarks:0:Thin Strokes"
+    [ "$output" = "0" ]
+}
+
+@test "configure_iterm2 re-applies on machines set up before ligatures and thin strokes" {
+    stub_iterm2_tools
+    load_script
+    load_config
+
+    # A machine configured by the previous version of setup.sh
+    plutil -create xml1 "$PREFS_STORE"
+    /usr/libexec/PlistBuddy \
+        -c "Add ':MachineSetupITerm2Settings' string 'GitHub Dark Default|MonaspaceNeonFrozen-Regular 14|minimal'" \
+        -c "Add ':New Bookmarks' array" \
+        -c "Add ':New Bookmarks:0' dict" \
+        -c "Add ':New Bookmarks:0:Name' string Default" \
+        -c "Add ':New Bookmarks:0:Guid' string GUID-A" \
+        -c "Add ':New Bookmarks:0:ASCII Ligatures' bool false" \
+        -c "Add ':New Bookmarks:0:Thin Strokes' integer 4" \
+        "$PREFS_STORE"
+
+    configure_iterm2
+
+    run prefs_value ":New Bookmarks:0:ASCII Ligatures"
+    [ "$output" = "true" ]
+    run prefs_value ":New Bookmarks:0:Thin Strokes"
+    [ "$output" = "0" ]
+
+    : > "$DEFAULTS_LOG"
+    configure_iterm2
+    run grep -c '^import' "$DEFAULTS_LOG"
+    [ "$output" = "0" ]
+}
+
+@test "configure_iterm2 re-applies on machines set up with only the dark scheme" {
+    stub_iterm2_tools
+    load_script
+    load_config
+
+    # A machine configured by the previous version of setup.sh
+    plutil -create xml1 "$PREFS_STORE"
+    /usr/libexec/PlistBuddy \
+        -c "Add ':MachineSetupITerm2Settings' string 'GitHub Dark Default|MonaspaceNeonFrozen-Regular 14|minimal|ligatures=true|thin_strokes=never'" \
+        -c "Add ':New Bookmarks' array" \
+        -c "Add ':New Bookmarks:0' dict" \
+        -c "Add ':New Bookmarks:0:Name' string Default" \
+        -c "Add ':New Bookmarks:0:Guid' string GUID-A" \
+        -c "Add ':New Bookmarks:0:Use Separate Colors for Light and Dark Mode' bool false" \
+        "$PREFS_STORE"
+
+    configure_iterm2
+
+    run prefs_value ":New Bookmarks:0:Use Separate Colors for Light and Dark Mode"
+    [ "$output" = "true" ]
+    run red_component ":New Bookmarks:0:Background Color (Light)"
+    [ "$output" = "1.0000" ]
+
+    : > "$DEFAULTS_LOG"
+    configure_iterm2
+    run grep -c '^import' "$DEFAULTS_LOG"
+    [ "$output" = "0" ]
 }
 
 @test "configure_iterm2 refuses to change preferences while iTerm2 is running" {

@@ -34,10 +34,14 @@ jobs:
             (.mac.packages.casks | type == "array") and
             (.mac.packages.formulas | type == "array") and
             (.mac.editors | type == "array") and
-            (.mac.iterm2.color_preset | type == "string") and
-            (.mac.iterm2.color_scheme_file | type == "string") and
+            (.mac.iterm2.light.color_preset | type == "string") and
+            (.mac.iterm2.light.color_scheme_file | type == "string") and
+            (.mac.iterm2.dark.color_preset | type == "string") and
+            (.mac.iterm2.dark.color_scheme_file | type == "string") and
             (.mac.iterm2.font | type == "string") and
             (.mac.iterm2.theme | type == "string") and
+            (.mac.iterm2.ligatures | type == "boolean") and
+            (.mac.iterm2.thin_strokes | type == "string") and
             (.mac.monaspace_frozen_version | type == "string") and
             (.mac.post_install_launch | type == "array") and
             (.mac.dock_apps | type == "array") and

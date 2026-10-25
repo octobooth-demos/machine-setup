@@ -10,7 +10,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Installs and configures Visual Studio Code and Visual Studio Code Insiders.
 - Installs GitHub CLI, logs it in with the scopes the booth demos need, and installs a suite of GitHub CLI extensions.
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
-- Installs iTerm2 on macOS, sets its default profile to the GitHub Dark Default color scheme with Monaspace Neon Frozen 14, and switches it to the Minimal theme.
+- Installs iTerm2 on macOS, sets its default profile to follow the macOS appearance (GitHub Light Default in light mode, GitHub Dark Default in dark mode) with Monaspace Neon Frozen 14 (ligatures on, thin strokes off), and switches it to the Minimal theme.
 - Installs the SF Mono, Monaspace (including the Frozen variants), and Mona Sans fonts on macOS.
 - Adds Google Chrome, the GitHub Copilot app, VS Code, VS Code Insiders, and iTerm2 to the macOS Dock and hides suggested and recent apps there.
 - Makes Google Chrome the default browser on macOS (via `defaultbrowser`), including when Chrome was already installed.
@@ -27,7 +27,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - `mac`: Homebrew packages, editor binaries, iTerm2 theme settings, the Monaspace Frozen font version, Dock apps, and post-install apps for `setup.sh`.
 - `windows`: `winget` packages, editor commands, and post-install apps for `setup.ps1`.
 
-`mac.iterm2` controls iTerm2's look. `setup.sh` takes the colors from `color_scheme_file` (stored in [`iterm2/`](iterm2/README.md)), adds them to iTerm2's Color Presets as `color_preset`, and applies them and `font` (a PostScript name and size, such as `MonaspaceNeonFrozen-Regular 14`) to iTerm2's default profile. If iTerm2 has never been opened, it creates that "Default" profile. `theme` sets **Settings > Appearance > General > Theme** through the `TabStyleWithAutomaticOption` preference. It can be `regular` (4), `minimal` (5), `compact` (6), `light` (0), `dark` (1), `light-high-contrast` (2), or `dark-high-contrast` (3), using the values from iTerm2's `iTermPreferencesTabStyle`. Quit iTerm2 before running setup, because iTerm2 overwrites preference changes when it quits. Once these settings are applied, later runs leave iTerm2 alone. They apply again if you change `color_preset`, `font`, or `theme` in `config.json`, or run with `FORCE_REINSTALL=true`. Machines set up before `font` and `theme` were tracked get the new settings on their next run.
+`mac.iterm2` controls iTerm2's look. `light` and `dark` each have a `color_scheme_file` (stored in [`iterm2/`](iterm2/README.md)) and a `color_preset` name. `setup.sh` adds both schemes to iTerm2's Color Presets. It turns on **Use separate colors for light and dark mode** in the default profile and applies the light scheme to its light-mode colors and the dark scheme to its dark-mode colors, so iTerm2 switches with the macOS appearance. The plain colors are set to the dark scheme for older iTerm2 versions without that option. It also applies `font` (a PostScript name and size, such as `MonaspaceNeonFrozen-Regular 14`) to the default profile. If iTerm2 has never been opened, it creates that "Default" profile. `theme` sets **Settings > Appearance > General > Theme** through the `TabStyleWithAutomaticOption` preference. It can be `regular` (4), `minimal` (5), `compact` (6), `light` (0), `dark` (1), `light-high-contrast` (2), or `dark-high-contrast` (3), using the values from iTerm2's `iTermPreferencesTabStyle`. `ligatures` sets the profile's **Use ligatures** option (Settings > Profiles > Text). Monaspace's texture healing and coding ligatures only show when it's on, which iTerm2 doesn't do by default. `thin_strokes` sets **Use thin strokes**: `never` (0), `retina-dark-backgrounds-only` (1), `dark-backgrounds-only` (2), `always` (3), or `retina-only` (4, iTerm2's default), from iTerm2's `iTermThinStrokesSetting`. Quit iTerm2 before running setup, because iTerm2 overwrites preference changes when it quits. Once these settings are applied, later runs leave iTerm2 alone. They apply again if you change either `color_preset`, `font`, `theme`, `ligatures`, or `thin_strokes` in `config.json`, or run with `FORCE_REINSTALL=true`. Machines set up before a setting was tracked get it on their next run.
 
 Fonts: the `font-monaspace` cask installs Monaspace, and `font-mona-sans` installs Mona Sans. The `font-sf-mono` cask installs SF Mono from Apple and asks for an admin password. The cask doesn't include Monaspace's "Frozen" fonts (such as Monaspace Neon Frozen, the iTerm2 font). So `setup.sh` downloads `monaspace-frozen-v<version>.zip` from the [githubnext/monaspace release](https://github.com/githubnext/monaspace/releases) pinned in `mac.monaspace_frozen_version`, and copies its `.ttf` files to `~/Library/Fonts`. Later runs skip this step unless the pinned version changes or `FORCE_REINSTALL=true`.
 
@@ -98,7 +98,7 @@ You can run `bash setup.sh` again on a configured Mac without resetting it. Step
 
 - Homebrew packages that are already installed are left alone, and so are Chrome and the GitHub Copilot app when they're already in `/Applications`.
 - The Monaspace Frozen fonts are skipped when the pinned version is already installed.
-- iTerm2 is skipped when its color preset, font, and theme already match `config.json`.
+- iTerm2 is skipped when its light and dark color presets, font, theme, ligatures, and thin strokes already match `config.json`.
 - Dock apps that are already in the Dock are skipped, and Chrome is skipped when it's already the default browser.
 - The GitHub CLI login only asks for missing scopes, and repos already in `~/repos` aren't cloned again.
 - The GitHub.com sign-in pause in Chrome still runs. Press Enter if you're already signed in.
@@ -106,7 +106,7 @@ You can run `bash setup.sh` again on a configured Mac without resetting it. Step
 To redo everything, run `FORCE_REINSTALL=true bash setup.sh`. To redo just one step, clear its marker and rerun `bash setup.sh`:
 
 ```bash
-# iTerm2 colors, font, and theme (quit iTerm2 first)
+# iTerm2 colors, font, theme, ligatures, and thin strokes (quit iTerm2 first)
 defaults delete com.googlecode.iterm2 MachineSetupITerm2Settings
 
 # Monaspace Frozen fonts
