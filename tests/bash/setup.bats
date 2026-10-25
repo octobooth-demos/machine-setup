@@ -542,50 +542,96 @@ STUB
     [[ "$output" == *"System Settings"* ]]
 }
 
-# Stubs dockutil with a Dock backed by a file of app paths
-stub_dockutil() {
+# Stubs dockutil, defaults, and killall with a Dock backed by files, and
+# creates fake app bundles for every app in mac.dock_apps
+stub_dock() {
     export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
     export DOCK_FILE="$BATS_TEST_TMPDIR/dock"
-    export ITERM2_APP_PATH="$BATS_TEST_TMPDIR/Applications/iTerm.app"
-    mkdir -p "$BATS_TEST_TMPDIR/bin" "$ITERM2_APP_PATH"
+    export DOCK_LOG="$BATS_TEST_TMPDIR/dock.log"
+    export SHOW_RECENTS_FILE="$BATS_TEST_TMPDIR/show-recents"
+    export APPLICATIONS_DIR="$BATS_TEST_TMPDIR/Applications"
+    mkdir -p "$BATS_TEST_TMPDIR/bin" "$APPLICATIONS_DIR"
     : > "$DOCK_FILE"
+    rm -f "$SHOW_RECENTS_FILE"
+
+    while IFS= read -r app; do mkdir -p "$APPLICATIONS_DIR/$app.app"; done \
+        < <(jq -r '.mac.dock_apps[]' "$REPO_ROOT/config.json")
 
     cat > "$BATS_TEST_TMPDIR/bin/dockutil" <<'STUB'
 #!/bin/bash
+echo "dockutil $*" >> "$DOCK_LOG"
 case "$1" in
-    --find) grep -q "/$2.app$" "$DOCK_FILE" ;;
-    --add) echo "$2" >> "$DOCK_FILE" ;;
+    --find) grep -qxF "$2" "$DOCK_FILE" ;;
+    --add) [[ "$3" == "--no-restart" ]] || exit 9; basename "$2" .app >> "$DOCK_FILE" ;;
 esac
 STUB
-    chmod +x "$BATS_TEST_TMPDIR/bin/dockutil"
+    cat > "$BATS_TEST_TMPDIR/bin/defaults" <<'STUB'
+#!/bin/bash
+echo "defaults $*" >> "$DOCK_LOG"
+case "$1" in
+    read) [[ -f "$SHOW_RECENTS_FILE" ]] && cat "$SHOW_RECENTS_FILE" ;;
+    write) echo 0 > "$SHOW_RECENTS_FILE" ;;
+esac
+STUB
+    cat > "$BATS_TEST_TMPDIR/bin/killall" <<'STUB'
+#!/bin/bash
+echo "killall $*" >> "$DOCK_LOG"
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/dockutil" "$BATS_TEST_TMPDIR/bin/defaults" "$BATS_TEST_TMPDIR/bin/killall"
 }
 
-@test "config installs dockutil on macOS" {
+@test "config installs dockutil and lists the Dock apps" {
     run jq -e '.mac.packages.formulas | index("dockutil")' "$REPO_ROOT/config.json"
     [ "$status" -eq 0 ]
+
+    run jq -r '.mac.dock_apps | join(",")' "$REPO_ROOT/config.json"
+    [ "$output" = "GitHub Copilot,Visual Studio Code,Visual Studio Code - Insiders,iTerm" ]
 }
 
-@test "add_iterm2_to_dock adds iTerm2 once" {
-    stub_dockutil
+@test "configure_dock adds apps, hides recents, and restarts the Dock once" {
+    stub_dock
     load_script
+    load_config
 
-    run add_iterm2_to_dock
+    run configure_dock
     [ "$status" -eq 0 ]
-    [[ "$output" == *"iTerm2 added to the Dock"* ]]
 
-    run add_iterm2_to_dock
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"already in the Dock"* ]]
+    run cat "$DOCK_FILE"
+    [ "$output" = "$(jq -r '.mac.dock_apps[]' "$REPO_ROOT/config.json")" ]
+    [ "$(cat "$SHOW_RECENTS_FILE")" = "0" ]
+    [ "$(grep -c '^killall Dock$' "$DOCK_LOG")" = "1" ]
 
-    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "1" ]
+    run grep -E 'dockutil --remove|show-persistent|downloads|trash' "$DOCK_LOG"
+    [ "$status" -ne 0 ]
 }
 
-@test "add_iterm2_to_dock skips when iTerm2 is not installed" {
-    stub_dockutil
-    rm -rf "$ITERM2_APP_PATH"
+@test "configure_dock is idempotent and doesn't restart the Dock when nothing changes" {
+    stub_dock
     load_script
+    load_config
 
-    run add_iterm2_to_dock
+    configure_dock
+    : > "$DOCK_LOG"
+
+    run configure_dock
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "4" ]
+
+    run grep -E 'dockutil --add|defaults write|killall' "$DOCK_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "configure_dock reports a missing app but still adds the others" {
+    stub_dock
+    rm -rf "$APPLICATIONS_DIR/iTerm.app"
+    load_script
+    load_config
+
+    run configure_dock
     [ "$status" -eq 1 ]
-    [ ! -s "$DOCK_FILE" ]
+    [[ "$output" == *"iTerm not found"* ]]
+
+    run grep -cxF "iTerm" "$DOCK_FILE"
+    [ "$output" = "0" ]
+    [ "$(wc -l < "$DOCK_FILE" | tr -d ' ')" = "3" ]
 }
