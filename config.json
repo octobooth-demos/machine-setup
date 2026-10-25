@@ -102,7 +102,8 @@
     "iterm2": {
       "color_preset": "GitHub Dark Default",
       "color_scheme_file": "iterm2/github-dark-default.itermcolors",
-      "font": "MonaspaceNeon-Regular 12"
+      "font": "MonaspaceNeonFrozen-Regular 14",
+      "theme": "compact"
     },
     "post_install_launch": [],
     "dock_apps": [
@@ -111,7 +112,8 @@
       "Visual Studio Code",
       "Visual Studio Code - Insiders",
       "iTerm"
-    ]
+    ],
+    "monaspace_frozen_version": "1.400"
   },
   "windows": {
     "packages": [

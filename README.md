@@ -10,8 +10,8 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Installs and configures Visual Studio Code and Visual Studio Code Insiders.
 - Installs GitHub CLI, logs it in with the scopes the booth demos need, and installs a suite of GitHub CLI extensions.
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
-- Installs iTerm2 on macOS and sets its default profile to the GitHub Dark Default color scheme with Monaspace Neon.
-- Installs the SF Mono, Monaspace, and Mona Sans fonts on macOS.
+- Installs iTerm2 on macOS, sets its default profile to the GitHub Dark Default color scheme with Monaspace Neon Frozen 14, and switches it to the Compact theme.
+- Installs the SF Mono, Monaspace (including the Frozen variants), and Mona Sans fonts on macOS.
 - Adds Google Chrome, the GitHub Copilot app, VS Code, VS Code Insiders, and iTerm2 to the macOS Dock and hides suggested and recent apps there.
 - Makes Google Chrome the default browser on macOS (via `defaultbrowser`), including when Chrome was already installed.
 - Configures VLC media player settings.
@@ -24,10 +24,12 @@ This repository contains setup scripts for configuring booth machines. The scrip
 `config.json` is the single source of truth for both setup scripts.
 
 - `shared`: settings used by both platforms, including VS Code extensions, GitHub CLI extensions, GitHub CLI auth scopes, demo sites, VLC settings, MCP servers, and repos to clone.
-- `mac`: Homebrew packages, editor binaries, iTerm2 theme settings, Dock apps, and post-install apps for `setup.sh`.
+- `mac`: Homebrew packages, editor binaries, iTerm2 theme settings, the Monaspace Frozen font version, Dock apps, and post-install apps for `setup.sh`.
 - `windows`: `winget` packages, editor commands, and post-install apps for `setup.ps1`.
 
-`mac.iterm2` controls the iTerm2 theme. `setup.sh` takes the colors from `color_scheme_file` (stored in [`iterm2/`](iterm2/README.md)), adds them to iTerm2's Color Presets as `color_preset`, and applies them and `font` to iTerm2's default profile. If iTerm2 has never been opened, it creates that "Default" profile. The `font-monaspace` cask provides Monaspace Neon (the iTerm2 font), and `font-mona-sans` installs Mona Sans. The `font-sf-mono` cask installs SF Mono from Apple and asks for an admin password. Quit iTerm2 before running setup, because iTerm2 overwrites preference changes when it quits. Once the theme is applied, later runs leave the profile alone unless `FORCE_REINSTALL=true`.
+`mac.iterm2` controls iTerm2's look. `setup.sh` takes the colors from `color_scheme_file` (stored in [`iterm2/`](iterm2/README.md)), adds them to iTerm2's Color Presets as `color_preset`, and applies them and `font` (a PostScript name and size, such as `MonaspaceNeonFrozen-Regular 14`) to iTerm2's default profile. If iTerm2 has never been opened, it creates that "Default" profile. `theme` sets **Settings > Appearance > General > Theme** through the `TabStyleWithAutomaticOption` preference. It can be `regular` (4), `minimal` (5), `compact` (6), `light` (0), `dark` (1), `light-high-contrast` (2), or `dark-high-contrast` (3), using the values from iTerm2's `iTermPreferencesTabStyle`. Quit iTerm2 before running setup, because iTerm2 overwrites preference changes when it quits. Once these settings are applied, later runs leave iTerm2 alone. They apply again if you change `color_preset`, `font`, or `theme` in `config.json`, or run with `FORCE_REINSTALL=true`. Machines set up before `font` and `theme` were tracked get the new settings on their next run.
+
+Fonts: the `font-monaspace` cask installs Monaspace, and `font-mona-sans` installs Mona Sans. The `font-sf-mono` cask installs SF Mono from Apple and asks for an admin password. The cask doesn't include Monaspace's "Frozen" fonts (such as Monaspace Neon Frozen, the iTerm2 font). So `setup.sh` downloads `monaspace-frozen-v<version>.zip` from the [githubnext/monaspace release](https://github.com/githubnext/monaspace/releases) pinned in `mac.monaspace_frozen_version`, and copies its `.ttf` files to `~/Library/Fonts`. Later runs skip this step unless the pinned version changes or `FORCE_REINSTALL=true`.
 
 `mac.dock_apps` lists app names (the `.app` bundle in `/Applications`, without `.app`) that `setup.sh` adds to the Dock with the `dockutil` formula. Apps already in the Dock are skipped, even with `FORCE_REINSTALL=true`, so reruns don't add duplicates. This includes Chrome when it was installed outside Homebrew and already pinned. Setup also turns off **Show suggested and recent apps in Dock** and restarts the Dock once if anything changed. It doesn't remove anything, so Downloads and Trash stay.
 
