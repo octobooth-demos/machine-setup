@@ -79,7 +79,8 @@
       "formulas": [
         "gh",
         "python@3.14",
-        "nvm"
+        "nvm",
+        "defaultbrowser"
       ]
     },
     "editors": [

@@ -626,6 +626,42 @@ authenticate_github_web() {
     log_success "GitHub web authentication confirmed"
 }
 
+# Returns 0 if Chrome is the default browser (defaultbrowser marks it with "*")
+chrome_is_default_browser() {
+    defaultbrowser 2>/dev/null | grep -Eq '^\* chrome$'
+}
+
+# Makes Google Chrome the default browser. Works whether Chrome was installed by
+# this script or beforehand, as long as it has been launched once (which
+# authenticate_github_web does) so it is registered with macOS.
+set_default_browser_chrome() {
+    if ! command -v defaultbrowser &> /dev/null; then
+        log_warn "defaultbrowser is not installed - set Chrome as the default browser in System Settings > Desktop & Dock"
+        return 1
+    fi
+
+    if chrome_is_default_browser; then
+        log_success "Chrome is already the default browser"
+        return 0
+    fi
+
+    log_info "Setting Chrome as the default browser..."
+    if ! defaultbrowser chrome; then
+        log_error "Could not set Chrome as the default browser"
+        return 1
+    fi
+
+    log_info "Click \"Use Google Chrome\" in the macOS dialog, then press Enter..."
+    read -r
+
+    if ! chrome_is_default_browser; then
+        log_warn "Chrome is not the default browser - set it in System Settings > Desktop & Dock"
+        return 1
+    fi
+
+    log_success "Chrome is now the default browser"
+}
+
 # Assists user in setting up Progressive Web Apps (PWAs)
 install_pwas() {
     log_info "PWA setup is currently disabled. See README for details."
@@ -776,6 +812,7 @@ main() {
 
     # Web authentication (after packages so Chrome is available)
     authenticate_github_web
+    try_install "Chrome as default browser" set_default_browser_chrome
 
     # Setup environments
     authenticate_gh
