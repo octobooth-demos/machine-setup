@@ -413,3 +413,70 @@ STUB
     [ "$status" -eq 2 ]
     [[ "$output" == *"Usage:"* ]]
 }
+
+# Stubs xcode-select so `-p` succeeds once the CLT "install" has had
+# $CLT_READY_AFTER polls, and logs every invocation
+stub_xcode_select() {
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+    export XCODE_SELECT_LOG="$BATS_TEST_TMPDIR/xcode-select.log"
+    export CLT_DIR="$BATS_TEST_TMPDIR/CommandLineTools"
+    export CLT_POLLS="$BATS_TEST_TMPDIR/clt-polls"
+    export CLT_READY_AFTER="${1:-0}"
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    : > "$CLT_POLLS"
+
+    cat > "$BATS_TEST_TMPDIR/bin/xcode-select" <<'STUB'
+#!/bin/bash
+echo "$*" >> "$XCODE_SELECT_LOG"
+if [[ "$1" == "-p" ]]; then
+    polls=$(wc -l < "$CLT_POLLS")
+    echo x >> "$CLT_POLLS"
+    if (( polls >= CLT_READY_AFTER )); then
+        mkdir -p "$CLT_DIR"
+        echo "$CLT_DIR"
+        exit 0
+    fi
+    exit 2
+fi
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/xcode-select"
+
+    cat > "$BATS_TEST_TMPDIR/bin/sleep" <<'STUB'
+#!/bin/bash
+exit 0
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/sleep"
+}
+
+@test "install_xcode_clt does nothing when the tools are already installed" {
+    stub_xcode_select 0
+    load_script
+
+    run install_xcode_clt
+    [ "$status" -eq 0 ]
+
+    run grep -F -- "--install" "$XCODE_SELECT_LOG"
+    [ "$status" -ne 0 ]
+}
+
+@test "install_xcode_clt starts the installer and waits for it to finish" {
+    stub_xcode_select 3
+    load_script
+
+    run install_xcode_clt
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Xcode Command Line Tools installed"* ]]
+
+    run grep -c -F -- "--install" "$XCODE_SELECT_LOG"
+    [ "$output" = "1" ]
+}
+
+@test "install_xcode_clt exits with guidance when the install times out" {
+    stub_xcode_select 1000
+    export XCODE_CLT_TIMEOUT=30 XCODE_CLT_POLL_INTERVAL=10
+    load_script
+
+    run install_xcode_clt
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"xcode-select --install"* ]]
+}
