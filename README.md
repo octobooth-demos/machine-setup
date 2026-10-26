@@ -14,6 +14,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Installs iTerm2 on macOS, sets its default profile to follow the macOS appearance (GitHub Light Default in light mode, GitHub Dark Default in dark mode) with Monaspace Neon Frozen 14 (ligatures on, thin strokes off), and switches it to the Minimal theme.
 - Installs the SF Mono, Monaspace (including the Frozen variants), and Mona Sans fonts on macOS.
 - Adds Google Chrome, the GitHub Copilot app, VS Code, VS Code Insiders, and iTerm2 to the macOS Dock and hides suggested and recent apps there.
+- Pins VS Code, VS Code Insiders, the GitHub Copilot app, and Windows Terminal to the Windows taskbar.
 - Makes Google Chrome the default browser on macOS (via `defaultbrowser`), including when Chrome was already installed.
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
@@ -26,13 +27,15 @@ This repository contains setup scripts for configuring booth machines. The scrip
 
 - `shared`: settings used by both platforms, including VS Code extensions, GitHub CLI extensions, GitHub CLI auth scopes, demo sites, VLC settings, MCP servers, and repos to clone.
 - `mac`: Homebrew packages, editor binaries, iTerm2 theme settings, the Monaspace Frozen font version, Dock apps, and post-install apps for `setup.sh`.
-- `windows`: `winget` packages, editor commands, and post-install apps for `setup.ps1`.
+- `windows`: `winget` packages, editor commands, taskbar pins, and post-install apps for `setup.ps1`.
 
 `mac.iterm2` controls iTerm2's look. `light` and `dark` each have a `color_scheme_file` (stored in [`iterm2/`](iterm2/README.md)) and a `color_preset` name. `setup.sh` adds both schemes to iTerm2's Color Presets. It turns on **Use separate colors for light and dark mode** in the default profile and applies the light scheme to its light-mode colors and the dark scheme to its dark-mode colors, so iTerm2 switches with the macOS appearance. The plain colors are set to the dark scheme for older iTerm2 versions without that option. It also applies `font` (a PostScript name and size, such as `MonaspaceNeonFrozen-Regular 14`) to the default profile. If iTerm2 has never been opened, it creates that "Default" profile. `theme` sets **Settings > Appearance > General > Theme** through the `TabStyleWithAutomaticOption` preference. It can be `regular` (4), `minimal` (5), `compact` (6), `light` (0), `dark` (1), `light-high-contrast` (2), or `dark-high-contrast` (3), using the values from iTerm2's `iTermPreferencesTabStyle`. `ligatures` sets the profile's **Use ligatures** option (Settings > Profiles > Text). Monaspace's texture healing and coding ligatures only show when it's on, which iTerm2 doesn't do by default. `thin_strokes` sets **Use thin strokes**: `never` (0), `retina-dark-backgrounds-only` (1), `dark-backgrounds-only` (2), `always` (3), or `retina-only` (4, iTerm2's default), from iTerm2's `iTermThinStrokesSetting`. Quit iTerm2 before running setup, because iTerm2 overwrites preference changes when it quits. Once these settings are applied, later runs leave iTerm2 alone. They apply again if you change either `color_preset`, `font`, `theme`, `ligatures`, or `thin_strokes` in `config.json`, or run with `FORCE_REINSTALL=true`. Machines set up before a setting was tracked get it on their next run.
 
 Fonts: the `font-monaspace` cask installs Monaspace, and `font-mona-sans` installs Mona Sans. The `font-sf-mono` cask installs SF Mono from Apple and asks for an admin password. The cask doesn't include Monaspace's "Frozen" fonts (such as Monaspace Neon Frozen, the iTerm2 font). So `setup.sh` downloads `monaspace-frozen-v<version>.zip` from the [githubnext/monaspace release](https://github.com/githubnext/monaspace/releases) pinned in `mac.monaspace_frozen_version`, and copies its `.ttf` files to `~/Library/Fonts`. Later runs skip this step unless the pinned version changes or `FORCE_REINSTALL=true`.
 
 `mac.dock_apps` lists app names (the `.app` bundle in `/Applications`, without `.app`) that `setup.sh` adds to the Dock with the `dockutil` formula. Apps already in the Dock are skipped, even with `FORCE_REINSTALL=true`, so reruns don't add duplicates. This includes Chrome when it was installed outside Homebrew and already pinned. Setup also turns off **Show suggested and recent apps in Dock** and restarts the Dock once if anything changed. It doesn't remove anything, so Downloads and Trash stay.
+
+`windows.taskbar_pins` lists apps that `setup.ps1` pins to the Windows taskbar, in left-to-right order. Each `app_id` is the **AppID** shown by `Get-StartApps`. IDs that contain `!` are packaged apps (such as Windows Terminal), and the rest are desktop apps. Windows has no API to pin apps directly, so setup uses Microsoft's [taskbar layout policy](https://learn.microsoft.com/windows/configuration/taskbar/pinned-apps). It writes a layout XML to `%LOCALAPPDATA%\machine-setup\TaskbarLayout.xml`, points the current user's `StartLayoutFile` policy (`HKCU\Software\Policies\Microsoft\Windows\Explorer`) at it, and restarts Explorer so the pins show up. This needs an elevated (Administrator) prompt. Policy pins appear after the default and manually pinned apps, and Windows may pin them again if they're unpinned. On Windows 10, the policy also locks the Start tiles. Later runs skip this step unless the list changes or `FORCE_REINSTALL` is `"true"`.
 
 `shared.gh_auth_scopes` lists the extra scopes the GitHub CLI login needs: `codespace` (the Tailspin Toys demo creates a Codespace), `delete_repo` (the Demo Launcher's cleanup deletes demo repos), `project` (the Copilot Airways demo creates a GitHub Project, and cleanup deletes it), and `workflow` (demo repos include GitHub Actions workflows, and GitHub rejects pushes that add or change `.github/workflows` files without it). A new login requests them, and an existing login missing any of them is upgraded with `gh auth refresh`, which opens a browser to approve. Both scripts ignore `GH_TOKEN`/`GITHUB_TOKEN` for these steps so the stored login is the one updated. To do it by hand, see [GitHub CLI login](#github-cli-login).
 
@@ -158,7 +161,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 What to expect:
 
 1. `winget` installs everything in `windows.packages` in [`config.json`](config.json). PowerShell 7 (`Microsoft.PowerShell`) is installed first, followed by VS Code, VS Code Insiders, Windows Terminal, Git, GitHub CLI, Node.js LTS, Python, VLC, Copilot CLI, the GitHub Copilot app, and GitHub Desktop. This takes a while, and some installers briefly show their own windows.
-2. The script refreshes `PATH` after the installs, so the rest of the run can use `pwsh`, `gh`, `code`, and the other new tools. It then configures VLC.
+2. The script refreshes `PATH` after the installs, so the rest of the run can use `pwsh`, `gh`, `code`, and the other new tools. It then configures VLC and pins VS Code, VS Code Insiders, the GitHub Copilot app, and Windows Terminal to the taskbar. The taskbar briefly disappears while Explorer restarts.
 3. It pauses so you can sign in to GitHub.com in Microsoft Edge with the booth/demo account. Press Enter when you're signed in.
 4. Approve the GitHub CLI login (or scope upgrade) in the browser when prompted. See [GitHub CLI login](#github-cli-login).
 5. It installs GitHub CLI extensions, clones the demo repos into `$HOME\repos`, installs VS Code extensions and the theme, and registers MCP servers for Copilot CLI.
@@ -170,6 +173,13 @@ What to expect:
 - Close the window and open a new terminal so it picks up the updated `PATH`. Check PowerShell 7 with `pwsh --version`. Windows Terminal adds a **PowerShell** profile for it, and Windows PowerShell 5.1 stays installed alongside it. Run future scripts with `pwsh`.
 - Store booth videos in `C:\Users\<YourUsername>\Videos` so the launcher opens them in VLC.
 - Set up the [Demo Launcher](#windows-repo-setup-scripts-project). To update it later, run `.\install-demo-launcher.ps1` (see [Install or update the canvas on Windows](#install-or-update-the-canvas-on-windows)).
+- To add the taskbar pins on a machine that ran setup before they existed, pull the latest and run `.\setup.ps1` again, or run only that step from an Administrator prompt in the repo folder:
+
+  ```powershell
+  . .\setup.ps1; Import-Config; Set-TaskbarPins
+  ```
+
+  To check it, look for the four icons on the taskbar, and run `Get-ItemProperty HKCU:\Software\Policies\Microsoft\Windows\Explorer` to see `StartLayoutFile` and `LockedStartLayout`. To apply it again after editing the pins, run `$script:ForceReinstall = $true; Set-TaskbarPins` in the same window. To undo it, run `Remove-ItemProperty HKCU:\Software\Policies\Microsoft\Windows\Explorer -Name StartLayoutFile, LockedStartLayout`, restart Explorer, and unpin the icons.
 
 Set `$env:NONINTERACTIVE = "true"` before running `setup.ps1` to skip GitHub browser login, CLI login, and scope refresh. Existing CLI credentials (including `GH_TOKEN` or `GITHUB_TOKEN`) are used to install extensions and clone repositories. Without usable credentials, those steps are deferred with warnings; authenticate with `gh auth login` and rerun setup to complete them. Set `$env:FORCE_REINSTALL = "true"` to redo steps that are normally skipped on reruns.
 

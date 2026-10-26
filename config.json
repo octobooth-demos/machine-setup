@@ -150,6 +150,24 @@
         "settings_dir": "Code - Insiders"
       }
     ],
+    "taskbar_pins": [
+      {
+        "name": "Visual Studio Code",
+        "app_id": "Microsoft.VisualStudioCode"
+      },
+      {
+        "name": "Visual Studio Code - Insiders",
+        "app_id": "Microsoft.VisualStudioCodeInsiders"
+      },
+      {
+        "name": "GitHub Copilot",
+        "app_id": "com.github.githubapp"
+      },
+      {
+        "name": "Terminal",
+        "app_id": "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"
+      }
+    ],
     "post_install_launch": []
   }
 }

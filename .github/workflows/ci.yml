@@ -47,6 +47,7 @@ jobs:
             (.mac.dock_apps | type == "array") and
             (.windows.packages | type == "array") and
             (.windows.editors | type == "array") and
+            (.windows.taskbar_pins | type == "array") and
             (.windows.post_install_launch | type == "array")
           ' config.json > /dev/null
 

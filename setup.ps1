@@ -41,6 +41,10 @@ $script:WingetSuccessExitCodes = @(
 
 function Test-ShouldSkipInstalled { return -not $script:ForceReinstall }
 
+# Windows 11 has no API to pin apps directly; the supported route is a taskbar
+# layout XML referenced by the StartLayoutFile policy, which Explorer reads at start.
+$script:TaskbarPolicyKey = "HKCU:\Software\Policies\Microsoft\Windows\Explorer"
+
 # ----------------------------------------
 # Logging Helpers
 # ----------------------------------------
@@ -178,6 +182,106 @@ function Start-PostInstallApps {
         catch {
             Write-Warn "Could not open $app"
         }
+    }
+}
+
+function Get-TaskbarLayoutPath {
+    if ($env:SETUP_SCRIPT_TASKBAR_LAYOUT_PATH) {
+        return $env:SETUP_SCRIPT_TASKBAR_LAYOUT_PATH
+    }
+    return (Join-Path $env:LOCALAPPDATA "machine-setup\TaskbarLayout.xml")
+}
+
+function New-TaskbarLayoutXml {
+    param([object[]]$Pins)
+
+    $lines = @(
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<LayoutModificationTemplate'
+        '    xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification"'
+        '    xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout"'
+        '    xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout"'
+        '    xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout"'
+        '    Version="1">'
+        '  <CustomTaskbarLayoutCollection>'
+        '    <defaultlayout:TaskbarLayout>'
+        '      <taskbar:TaskbarPinList>'
+    )
+    foreach ($pin in $Pins) {
+        $id = [System.Security.SecurityElement]::Escape($pin.app_id)
+        # Packaged (UWP/MSIX) apps have an AUMID of the form "<PackageFamilyName>!<AppId>".
+        if ($pin.app_id -like "*!*") {
+            $lines += "        <taskbar:UWA AppUserModelID=`"$id`" />"
+        }
+        else {
+            $lines += "        <taskbar:DesktopApp DesktopApplicationID=`"$id`" />"
+        }
+    }
+    $lines += @(
+        '      </taskbar:TaskbarPinList>'
+        '    </defaultlayout:TaskbarLayout>'
+        '  </CustomTaskbarLayoutCollection>'
+        '</LayoutModificationTemplate>'
+    )
+    return ($lines -join "`r`n")
+}
+
+function Restart-Explorer {
+    Get-Process -Name explorer -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
+    Start-Sleep -Seconds 2
+    if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) {
+        Start-Process explorer.exe
+    }
+}
+
+function Set-TaskbarPins {
+    $pins = @($config.windows.taskbar_pins | Where-Object { $_ })
+    if ($pins.Count -eq 0) {
+        return
+    }
+
+    Write-Info "Pinning apps to the taskbar..."
+
+    if (Get-Command Get-StartApps -ErrorAction SilentlyContinue) {
+        $installedIds = @(Get-StartApps | ForEach-Object { $_.AppID })
+        foreach ($pin in $pins) {
+            if ($installedIds -notcontains $pin.app_id) {
+                Write-Warn "$($pin.name) ($($pin.app_id)) isn't installed yet; its pin appears once it is"
+            }
+        }
+    }
+
+    $layoutPath = Get-TaskbarLayoutPath
+    $layoutXml = New-TaskbarLayoutXml -Pins $pins
+
+    $existingXml = if (Test-Path $layoutPath) { (Get-Content -Raw -Path $layoutPath).TrimEnd() } else { $null }
+    $policy = Get-ItemProperty -Path $script:TaskbarPolicyKey -ErrorAction SilentlyContinue
+    $alreadyApplied = ($existingXml -eq $layoutXml) -and
+        ($policy.StartLayoutFile -eq $layoutPath) -and
+        ($policy.LockedStartLayout -eq 1)
+
+    if ($alreadyApplied -and (Test-ShouldSkipInstalled)) {
+        Write-Success "Taskbar pins already configured"
+        return
+    }
+
+    try {
+        New-Item -Path (Split-Path $layoutPath) -ItemType Directory -Force | Out-Null
+        $layoutXml | Out-File -FilePath $layoutPath -Force -Encoding UTF8
+
+        if (-not (Test-Path $script:TaskbarPolicyKey)) {
+            New-Item -Path $script:TaskbarPolicyKey -Force -ErrorAction Stop | Out-Null
+        }
+        Set-ItemProperty -Path $script:TaskbarPolicyKey -Name StartLayoutFile -Value $layoutPath -Type ExpandString -ErrorAction Stop
+        Set-ItemProperty -Path $script:TaskbarPolicyKey -Name LockedStartLayout -Value 1 -Type DWord -ErrorAction Stop
+
+        # Explorer only reads the layout policy when it starts.
+        Restart-Explorer
+        Write-Success "Taskbar pins configured from $layoutPath"
+    }
+    catch {
+        $script:failedItems += "taskbar pins"
+        Write-Err "Failed: taskbar pins - $_"
     }
 }
 
@@ -608,6 +712,7 @@ function Invoke-Main {
     # Install packages
     Install-Packages
     Set-VLCConfiguration
+    Set-TaskbarPins
 
     # Launch post-install apps
     Start-PostInstallApps
