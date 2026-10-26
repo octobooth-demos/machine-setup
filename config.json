@@ -125,6 +125,7 @@
   },
   "windows": {
     "packages": [
+      "Microsoft.PowerShell",
       "Microsoft.VisualStudioCode",
       "Microsoft.VisualStudioCode.Insiders",
       "Microsoft.WindowsTerminal",
