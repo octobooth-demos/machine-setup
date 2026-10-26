@@ -18,7 +18,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Configures VLC media player settings.
 - Creates a demo loader script to launch the required applications and sites.
 - Registers shared MCP servers for Copilot CLI.
-- Clones the demo repos into `~/repos` and, on macOS, installs the Demo Launcher canvas for every Copilot session. `install-demo-launcher.sh` does just that step on a machine that is already set up (see [Demo Launcher](#demo-launcher)).
+- Clones the demo repos into `~/repos` and, on macOS, installs the Demo Launcher canvas for every Copilot session. `install-demo-launcher.sh` (macOS/Linux) and `install-demo-launcher.ps1` (Windows) do just that step on a machine that is already set up (see [Demo Launcher](#demo-launcher)).
 
 ## Configuration
 
@@ -139,7 +139,7 @@ git clone https://github.com/octobooth-demos/machine-setup.git "$HOME\repos\mach
 cd "$HOME\repos\machine-setup"
 ```
 
-Before each booth day, and before re-running `setup.ps1`, pull the latest with `git -C "$HOME\repos\machine-setup" pull`.
+Before each booth day, and before re-running `setup.ps1` or `install-demo-launcher.ps1`, pull the latest with `git -C "$HOME\repos\machine-setup" pull`.
 
 #### 4. Allow the script to run
 
@@ -169,7 +169,7 @@ What to expect:
 
 - Close the window and open a new terminal so it picks up the updated `PATH`. Check PowerShell 7 with `pwsh --version`. Windows Terminal adds a **PowerShell** profile for it, and Windows PowerShell 5.1 stays installed alongside it. Run future scripts with `pwsh`.
 - Store booth videos in `C:\Users\<YourUsername>\Videos` so the launcher opens them in VLC.
-- Set up the [Demo Launcher](#windows-repo-setup-scripts-project).
+- Set up the [Demo Launcher](#windows-repo-setup-scripts-project). To update it later, run `.\install-demo-launcher.ps1` (see [Install or update the canvas on Windows](#install-or-update-the-canvas-on-windows)).
 
 Set `$env:NONINTERACTIVE = "true"` before running `setup.ps1` to skip GitHub browser login, CLI login, and scope refresh. Existing CLI credentials (including `GH_TOKEN` or `GITHUB_TOKEN`) are used to install extensions and clone repositories. Without usable credentials, those steps are deferred with warnings; authenticate with `gh auth login` and rerun setup to complete them. Set `$env:FORCE_REINSTALL = "true"` to redo steps that are normally skipped on reruns.
 
@@ -233,13 +233,34 @@ On booth machines, do both. The loader makes the launcher available in any sessi
 
 ### Windows: repo-setup-scripts project
 
-`install.sh` is macOS/Linux only, so on Windows the project is the only way to get the launcher.
+`install.sh` is macOS/Linux only, so on Windows the canvas loads from the repo-setup-scripts project. `setup.ps1` clones it to `$HOME\repos\repo-setup-scripts`.
 
 1. Open the GitHub Copilot app and sign in with the booth/demo account.
-2. Add `~/repos/repo-setup-scripts` (or `octobooth-demos/repo-setup-scripts`) as a project.
+2. Add the existing local folder `$HOME\repos\repo-setup-scripts` as a project. Don't clone it again, so the update steps below keep the project current.
 3. Start a session in that project and ask Copilot to "open the demo launcher".
 
-### Install or update on a machine that's already set up
+#### Install or update the canvas on Windows
+
+Before each booth day, update the checkout, then restart the GitHub Copilot app (or reload extensions) so it loads the new launcher. From an up-to-date clone of this repo, in PowerShell:
+
+```powershell
+git -C "$HOME\repos\machine-setup" pull
+cd "$HOME\repos\machine-setup"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+.\install-demo-launcher.ps1
+```
+
+It's safe to re-run. It checks for `git` and `gh`, clones `octobooth-demos/repo-setup-scripts` to `$HOME\repos\repo-setup-scripts` if it's missing (this needs a logged-in GitHub CLI; see [GitHub CLI login](#github-cli-login)), or fast-forwards it with `git pull --ff-only` if it's already there. It exits with an error and lists what failed if the clone or pull doesn't work. If a folder with that name exists but isn't a git checkout, the script stops; move the folder aside and re-run.
+
+To update by hand instead:
+
+```powershell
+git -C "$HOME\repos\repo-setup-scripts" pull --ff-only
+```
+
+Then restart the GitHub Copilot app.
+
+### Install or update on a macOS or Linux machine that's already set up
 
 Run it from an up-to-date clone, because an old copy installs with old logic:
 
@@ -281,10 +302,11 @@ bats tests/bash
 
 ```powershell
 Invoke-ScriptAnalyzer -Path .\setup.ps1 -Settings .\PSScriptAnalyzerSettings.psd1
+Invoke-ScriptAnalyzer -Path .\install-demo-launcher.ps1 -Settings .\PSScriptAnalyzerSettings.psd1
 Invoke-Pester -Path .\tests\powershell
 ```
 
-Both scripts now guard their main entry point so they can be sourced or dot-sourced safely from tests without triggering installs.
+The setup and Demo Launcher scripts guard their main entry point so they can be sourced or dot-sourced safely from tests without triggering installs.
 
 ## License
 
