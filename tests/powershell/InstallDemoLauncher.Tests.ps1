@@ -17,8 +17,13 @@ Describe 'install-demo-launcher.ps1' {
         $script:calls = [System.Collections.Generic.List[string]]::new()
         $script:ghLoggedIn = $true
         $script:gitExitCode = 0
+        $script:originUrl = 'https://github.com/octobooth-demos/repo-setup-scripts.git'
 
         Mock git {
+            if ($args -contains 'remote') {
+                $global:LASTEXITCODE = 0
+                return $script:originUrl
+            }
             $script:calls.Add("git $($args -join ' ')")
             $global:LASTEXITCODE = $script:gitExitCode
         }
@@ -39,6 +44,27 @@ Describe 'install-demo-launcher.ps1' {
     It 'reads the repo-setup-scripts repo from config.json' {
         Import-Config
         Get-DemoLauncherRepo | Should -Be 'octobooth-demos/repo-setup-scripts'
+    }
+
+    It 'ignores an untrusted repo-setup-scripts entry in config.json' {
+        $script:config = [pscustomobject]@{ shared = [pscustomobject]@{ repos_to_clone = @('attacker/repo-setup-scripts') } }
+
+        Get-DemoLauncherRepo | Should -Be 'octobooth-demos/repo-setup-scripts'
+        Should -Invoke Write-Warn -Times 1 -Exactly
+    }
+
+    It 'accepts SSH remotes for the trusted repo' {
+        $script:originUrl = 'git@github.com:octobooth-demos/repo-setup-scripts.git'
+        Test-DemoLauncherRemote -Target (Get-DemoLauncherRepoDir) | Should -BeTrue
+    }
+
+    It 'refuses to pull a checkout whose origin is not the trusted repo' {
+        New-Item -Path (Join-Path (Get-DemoLauncherRepoDir) '.git') -ItemType Directory -Force | Out-Null
+        $script:originUrl = 'https://github.com/attacker/repo-setup-scripts.git'
+
+        Invoke-DemoLauncherMain | Should -Be 1
+
+        $script:calls | Where-Object { $_ -like 'git *pull*' } | Should -BeNullOrEmpty
     }
 
     It 'clones repo-setup-scripts when the checkout is missing' {

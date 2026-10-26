@@ -250,15 +250,19 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 .\install-demo-launcher.ps1
 ```
 
-It's safe to re-run. It checks for `git` and `gh`, clones `octobooth-demos/repo-setup-scripts` to `$HOME\repos\repo-setup-scripts` if it's missing (this needs a logged-in GitHub CLI; see [GitHub CLI login](#github-cli-login)), or fast-forwards it with `git pull --ff-only` if it's already there. It exits with an error and lists what failed if the clone or pull doesn't work. If a folder with that name exists but isn't a git checkout, the script stops; move the folder aside and re-run.
+Re-running is safe. It checks for `git` and `gh`, clones `octobooth-demos/repo-setup-scripts` to `$HOME\repos\repo-setup-scripts` if it's missing (this needs a logged-in GitHub CLI; see [GitHub CLI login](#github-cli-login)), or, after checking that its `origin` is that repo, fast-forwards it with `git pull --ff-only`. It exits with an error and lists what failed if the clone or pull doesn't work. If a folder with that name exists but isn't a git checkout, the script stops; move the folder aside and re-run.
 
 To update by hand instead:
 
 ```powershell
+git -C "$HOME\repos\repo-setup-scripts" remote get-url origin   # should be octobooth-demos/repo-setup-scripts
 git -C "$HOME\repos\repo-setup-scripts" pull --ff-only
 ```
 
 Then restart the GitHub Copilot app.
+
+> [!WARNING]
+> Copilot reads the files in a project, so only add the `octobooth-demos/repo-setup-scripts` checkout as a project, and don't add other or unknown repos on booth machines. `install-demo-launcher.ps1` only uses that repo, even if `config.json` lists a different one. It also refuses to update a checkout whose `origin` points anywhere else. Updates come straight from that repo's default branch, so review changes there (for example with `git -C "$HOME\repos\repo-setup-scripts" log --oneline -5`) before a booth day.
 
 ### Install or update on a macOS or Linux machine that's already set up
 

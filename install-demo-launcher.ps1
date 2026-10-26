@@ -16,15 +16,27 @@
 # setup.ps1 only runs Invoke-Main when executed directly, so dot-sourcing it just loads its helpers
 . (Join-Path $PSScriptRoot "setup.ps1")
 
-$script:DefaultDemoLauncherRepo = "octobooth-demos/repo-setup-scripts"
+# Only this repo is trusted as the Demo Launcher source, because its checkout is
+# added as a Copilot project and its contents shape what Copilot does there.
+$script:TrustedDemoLauncherRepo = "octobooth-demos/repo-setup-scripts"
 
 function Get-DemoLauncherRepo {
-    $repo = $null
     if ($null -ne $script:config) {
-        $repo = $script:config.shared.repos_to_clone | Where-Object { ($_ -split '/')[-1] -eq 'repo-setup-scripts' } | Select-Object -First 1
+        $configured = $script:config.shared.repos_to_clone | Where-Object { ($_ -split '/')[-1] -eq 'repo-setup-scripts' } | Select-Object -First 1
+        if ($configured -and $configured -ne $script:TrustedDemoLauncherRepo) {
+            Write-Warn "Ignoring untrusted Demo Launcher repo '$configured' in config.json; using $script:TrustedDemoLauncherRepo."
+        }
     }
-    if ($repo) { return $repo }
-    return $script:DefaultDemoLauncherRepo
+    return $script:TrustedDemoLauncherRepo
+}
+
+function Test-DemoLauncherRemote {
+    param([string]$Target)
+
+    $url = git -C $Target remote get-url origin 2>$null
+    if ($LASTEXITCODE -ne 0) { return $false }
+    $pattern = '^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)' + [regex]::Escape($script:TrustedDemoLauncherRepo) + '(\.git)?/?$'
+    return ("$url".Trim() -match $pattern)
 }
 
 function Get-DemoLauncherRepoDir {
@@ -49,6 +61,11 @@ function Sync-DemoLauncherRepo {
     $target = Get-DemoLauncherRepoDir
 
     if (Test-Path (Join-Path $target ".git")) {
+        if (-not (Test-DemoLauncherRemote -Target $target)) {
+            $script:failedItems += "update: $repo ($target origin isn't $repo)"
+            Write-Err "$target doesn't point at $repo. Check 'git -C `"$target`" remote -v' before using it as a Copilot project."
+            return
+        }
         Write-Info "Updating $target..."
         Invoke-SafeInstall -Description "update: $repo" -Action {
             git -C $target pull --ff-only 2>&1
