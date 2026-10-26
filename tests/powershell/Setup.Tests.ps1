@@ -222,6 +222,59 @@ Describe 'setup.ps1' {
         $script:failedItems | Should -BeNullOrEmpty
     }
 
+    Context 'Set-TaskbarPins' {
+        BeforeEach {
+            $script:savedPolicyKey = $script:TaskbarPolicyKey
+            $script:savedForce = $script:ForceReinstall
+            $testId = [guid]::NewGuid().ToString('N')
+            $script:TaskbarPolicyKey = "TestRegistry:\Policies\$testId\Explorer"
+            $script:ForceReinstall = $false
+            $env:SETUP_SCRIPT_TASKBAR_LAYOUT_PATH = Join-Path $TestDrive "$testId\TaskbarLayout.xml"
+            Mock Restart-Explorer { }
+            if (-not (Get-Command Get-StartApps -ErrorAction SilentlyContinue)) {
+                function global:Get-StartApps { }
+            }
+            Mock Get-StartApps { @() }
+        }
+
+        AfterEach {
+            $script:TaskbarPolicyKey = $script:savedPolicyKey
+            $script:ForceReinstall = $script:savedForce
+            Remove-Item Env:\SETUP_SCRIPT_TASKBAR_LAYOUT_PATH -ErrorAction SilentlyContinue
+        }
+
+        It 'writes the layout, sets the policy, and restarts Explorer' {
+            Set-TaskbarPins
+
+            [xml]$layout = Get-Content -Raw -Path $env:SETUP_SCRIPT_TASKBAR_LAYOUT_PATH
+            $pinList = $layout.LayoutModificationTemplate.CustomTaskbarLayoutCollection.TaskbarLayout.TaskbarPinList
+            @($pinList.DesktopApp.DesktopApplicationID) | Should -Be @(
+                'Microsoft.VisualStudioCode', 'Microsoft.VisualStudioCodeInsiders', 'com.github.githubapp')
+            $pinList.UWA.AppUserModelID | Should -Be 'Microsoft.WindowsTerminal_8wekyb3d8bbwe!App'
+
+            $policy = Get-ItemProperty -Path $script:TaskbarPolicyKey
+            $policy.StartLayoutFile | Should -Be $env:SETUP_SCRIPT_TASKBAR_LAYOUT_PATH
+            $policy.LockedStartLayout | Should -Be 1
+            Should -Invoke Restart-Explorer -Times 1 -Exactly
+            $script:failedItems | Should -BeNullOrEmpty
+        }
+
+        It 'skips restarting Explorer when the layout is already applied' {
+            Set-TaskbarPins
+            Set-TaskbarPins
+
+            Should -Invoke Restart-Explorer -Times 1 -Exactly
+        }
+
+        It 'reapplies the layout with FORCE_REINSTALL' {
+            Set-TaskbarPins
+            $script:ForceReinstall = $true
+            Set-TaskbarPins
+
+            Should -Invoke Restart-Explorer -Times 2 -Exactly
+        }
+    }
+
     Context 'Invoke-Main authentication modes' {
         BeforeEach {
             $script:savedNonInteractive = $script:NonInteractive
@@ -229,6 +282,7 @@ Describe 'setup.ps1' {
             Mock Import-Config { }
             Mock Install-Packages { }
             Mock Set-VLCConfiguration { }
+            Mock Set-TaskbarPins { }
             Mock Start-PostInstallApps { }
             Mock Connect-GitHubWeb { }
             Mock Connect-GH { }
