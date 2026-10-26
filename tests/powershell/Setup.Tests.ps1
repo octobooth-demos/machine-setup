@@ -205,6 +205,10 @@ Describe 'setup.ps1' {
         $script:config.shared.gh_auth_scopes | Should -Contain 'workflow'
     }
 
+    It 'config installs PowerShell 7 first on Windows' {
+        $script:config.windows.packages[0] | Should -Be 'Microsoft.PowerShell'
+    }
+
     It 'Copy-Repos defers new clones without recording failures when requested' {
         $env:USERPROFILE = Join-Path $TestDrive 'unauthenticated'
         Mock gh { throw 'Cloning must not run without credentials' }

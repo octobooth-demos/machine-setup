@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/octobooth-demos/machine-setup/actions/workflows/ci.yml/badge.svg)
 
-This repository contains setup scripts for configuring booth machines. The scripts install and configure the GitHub Copilot app, Visual Studio Code, Visual Studio Code Insiders, GitHub CLI, VLC media player, Node.js, iTerm2 (macOS), and related tooling from a shared `config.json`.
+This repository contains setup scripts for configuring booth machines. The scripts install and configure the GitHub Copilot app, Visual Studio Code, Visual Studio Code Insiders, GitHub CLI, VLC media player, Node.js, PowerShell 7 (Windows), iTerm2 (macOS), and related tooling from a shared `config.json`.
 
 ## Features
 
@@ -10,6 +10,7 @@ This repository contains setup scripts for configuring booth machines. The scrip
 - Installs and configures Visual Studio Code and Visual Studio Code Insiders.
 - Installs GitHub CLI, logs it in with the scopes the booth demos need, and installs a suite of GitHub CLI extensions.
 - Installs Node.js LTS on macOS (via `nvm`) and Windows (via `winget`).
+- Installs PowerShell 7 (`Microsoft.PowerShell` winget package) on Windows alongside the built-in Windows PowerShell 5.1, so later steps and scripts can call `pwsh`.
 - Installs iTerm2 on macOS, sets its default profile to follow the macOS appearance (GitHub Light Default in light mode, GitHub Dark Default in dark mode) with Monaspace Neon Frozen 14 (ligatures on, thin strokes off), and switches it to the Minimal theme.
 - Installs the SF Mono, Monaspace (including the Frozen variants), and Mona Sans fonts on macOS.
 - Adds Google Chrome, the GitHub Copilot app, VS Code, VS Code Insiders, and iTerm2 to the macOS Dock and hides suggested and recent apps there.
@@ -39,43 +40,33 @@ Fonts: the `font-monaspace` cask installs Monaspace, and `font-mona-sans` instal
 
 ## Setup Instructions
 
-### Get the setup scripts
+Clone this repo so you can update the scripts before each run. A ZIP download never updates, so an old copy keeps running old scripts. Both platforms then share the [GitHub CLI login](#github-cli-login) checks below.
 
-Clone this repo so you can update the scripts before each run. A ZIP download never updates, so an old copy keeps running old scripts.
+### macOS setup
 
-1. Clone it.
+#### 1. Get the setup scripts
 
-   macOS (Terminal). On a new Mac, `git` doesn't work until the Xcode Command Line Tools are installed. Install them first: run the command below, click **Install** in the dialog, and wait for it to finish. If it says they're already installed, move on.
+1. Open Terminal. On a new Mac, `git` doesn't work until the Xcode Command Line Tools are installed. Install them first: run the command below, click **Install** in the dialog, and wait for it to finish. If it says they're already installed, move on.
 
    ```bash
    xcode-select --install
    ```
 
-   Then clone:
+2. Clone the repo:
 
    ```bash
    git clone https://github.com/octobooth-demos/machine-setup.git ~/repos/machine-setup
    ```
 
-   Windows (PowerShell). `setup.ps1` installs Git, but you need it once to clone this repo before the first run. If `git --version` fails, install it, then open a new terminal:
-
-   ```powershell
-   winget install --id Git.Git -e --source winget
-   git clone https://github.com/octobooth-demos/machine-setup.git "$HOME\repos\machine-setup"
-   ```
-
-2. Before each booth day, and before re-running `setup.sh`, `setup.ps1`, or `install-demo-launcher.sh`, pull the latest:
+3. Before each booth day, and before re-running `setup.sh` or `install-demo-launcher.sh`, pull the latest:
 
    ```bash
-   git -C ~/repos/machine-setup pull                 # macOS
-   git -C "$HOME\repos\machine-setup" pull           # Windows PowerShell
+   git -C ~/repos/machine-setup pull
    ```
-
-3. Follow the instructions for your operating system below, running commands from that folder.
 
 **Fallback for a new Mac without Git:** [download the ZIP](https://github.com/octobooth-demos/machine-setup/archive/refs/heads/main.zip) and run commands from the extracted `machine-setup-main` folder. Keep all files together, because the scripts need `config.json` and `setup.sh` also needs the `iterm2/` folder. Setup installs the Xcode Command Line Tools and Git, so switch to a clone afterward. If you stay on the ZIP, download it again before re-running any script.
 
-### macOS
+#### 2. Run setup
 
 1. Open a terminal and go to `~/repos/machine-setup` (or the extracted `machine-setup-main` folder).
 2. Run the setup script:
@@ -115,22 +106,72 @@ rm ~/Library/Fonts/.monaspace-frozen-version
 
 `brew uninstall iterm2` doesn't redo the iTerm2 step. Uninstalling removes the app but keeps its preferences, including the marker, so setup reinstalls the app and still skips the theme. Clear the marker instead.
 
-### Windows
+### Windows setup (clean machine)
 
-1. Open Windows Terminal as an administrator.
-2. Go to `$HOME\repos\machine-setup` (`cd "$HOME\repos\machine-setup"`).
-3. Run the setup script:
+These steps assume a brand-new Windows 10 or 11 machine with nothing installed beyond what ships with Windows. Sign in to Windows and connect to the internet first. Until setup finishes, you only have the built-in **Windows PowerShell 5.1**. `setup.ps1` is written to run there, and it installs PowerShell 7 for later use.
 
-   ```powershell
-   .\setup.ps1
-   ```
+#### 1. Open an administrator PowerShell
 
-4. The script pauses so you can sign in to GitHub.com in Microsoft Edge with the booth/demo account.
-5. Approve the GitHub CLI login (or scope upgrade) in the browser when prompted.
-6. A launcher script is created on the Desktop.
-7. Store booth videos in `C:\Users\<YourUsername>\Videos` so the launcher opens them in VLC.
+Right-click **Start** and choose **Terminal (Admin)** (Windows 11) or **Windows PowerShell (Admin)** (Windows 10), then approve the User Account Control prompt. Run every command below in this window. `setup.ps1` warns, and some installs can fail, when it isn't run as an administrator.
 
-Set `$env:NONINTERACTIVE = "true"` before running `setup.ps1` to skip GitHub browser login, CLI login, and scope refresh. Existing CLI credentials (including `GH_TOKEN` or `GITHUB_TOKEN`) are used to install extensions and clone repositories. Without usable credentials, those steps are deferred with warnings; authenticate with `gh auth login` and rerun setup to complete them.
+#### 2. Make sure winget works
+
+`winget` comes with the **App Installer** package from Microsoft Store. On a new machine it can take a few minutes after first sign-in to register. Check it:
+
+```powershell
+winget --version
+```
+
+If the command isn't found, open Microsoft Store, search for **App Installer**, click **Update** (or **Get**), and open a new administrator window. The first `winget` command may ask you to accept the source agreements; type `Y`.
+
+#### 3. Install Git and get the setup scripts
+
+`setup.ps1` installs Git too, but you need it once now to clone this repo:
+
+```powershell
+winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements
+```
+
+Close the window and open a new administrator PowerShell so `git` is on your `PATH`, then clone:
+
+```powershell
+git clone https://github.com/octobooth-demos/machine-setup.git "$HOME\repos\machine-setup"
+cd "$HOME\repos\machine-setup"
+```
+
+Before each booth day, and before re-running `setup.ps1`, pull the latest with `git -C "$HOME\repos\machine-setup" pull`.
+
+#### 4. Allow the script to run
+
+Windows blocks PowerShell scripts by default. Allow them for this window only (this doesn't change the machine's policy):
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+```
+
+#### 5. Run setup
+
+```powershell
+.\setup.ps1
+```
+
+What to expect:
+
+1. `winget` installs everything in `windows.packages` in [`config.json`](config.json). PowerShell 7 (`Microsoft.PowerShell`) is installed first, followed by VS Code, VS Code Insiders, Windows Terminal, Git, GitHub CLI, Node.js LTS, Python, VLC, Copilot CLI, the GitHub Copilot app, and GitHub Desktop. This takes a while, and some installers briefly show their own windows.
+2. The script refreshes `PATH` after the installs, so the rest of the run can use `pwsh`, `gh`, `code`, and the other new tools. It then configures VLC.
+3. It pauses so you can sign in to GitHub.com in Microsoft Edge with the booth/demo account. Press Enter when you're signed in.
+4. Approve the GitHub CLI login (or scope upgrade) in the browser when prompted. See [GitHub CLI login](#github-cli-login).
+5. It installs GitHub CLI extensions, clones the demo repos into `$HOME\repos`, installs VS Code extensions and the theme, and registers MCP servers for Copilot CLI.
+6. A launcher script (`load-demos.ps1`) is created on the Desktop.
+7. A summary at the end lists anything that failed. Fix the cause and run `.\setup.ps1` again; finished steps are skipped.
+
+#### 6. After setup
+
+- Close the window and open a new terminal so it picks up the updated `PATH`. Check PowerShell 7 with `pwsh --version`. Windows Terminal adds a **PowerShell** profile for it, and Windows PowerShell 5.1 stays installed alongside it. Run future scripts with `pwsh`.
+- Store booth videos in `C:\Users\<YourUsername>\Videos` so the launcher opens them in VLC.
+- Set up the [Demo Launcher](#windows-repo-setup-scripts-project).
+
+Set `$env:NONINTERACTIVE = "true"` before running `setup.ps1` to skip GitHub browser login, CLI login, and scope refresh. Existing CLI credentials (including `GH_TOKEN` or `GITHUB_TOKEN`) are used to install extensions and clone repositories. Without usable credentials, those steps are deferred with warnings; authenticate with `gh auth login` and rerun setup to complete them. Set `$env:FORCE_REINSTALL = "true"` to redo steps that are normally skipped on reruns.
 
 ### GitHub CLI login
 
@@ -161,6 +202,9 @@ The booth account must be a member of the `octobooth-demos` org and allowed to c
 If `GH_TOKEN` or `GITHUB_TOKEN` is set, `gh` uses that token instead of this login, and `gh auth refresh` won't run. Unset them on booth machines.
 
 ### Troubleshooting Windows package installs
+
+If `winget` isn't found, see [Make sure winget works](#2-make-sure-winget-works).
+
 
 WinGet error `-1978335138` (`0x8A15005E`, pinned certificate mismatch) can occur when querying the Microsoft Store source, even for a package available from the `winget` source. See [microsoft/winget-cli#3109](https://github.com/microsoft/winget-cli/issues/3109). [`setup.ps1`](setup.ps1) explicitly selects `--source winget` to avoid these unrelated Store failures while preserving certificate validation. All entries in `windows.packages` in [`config.json`](config.json) must be available from the `winget` source.
 
