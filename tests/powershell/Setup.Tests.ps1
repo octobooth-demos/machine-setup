@@ -231,6 +231,7 @@ Describe 'setup.ps1' {
             $script:ForceReinstall = $false
             $env:SETUP_SCRIPT_TASKBAR_LAYOUT_PATH = Join-Path $TestDrive "$testId\TaskbarLayout.xml"
             Mock Restart-Explorer { }
+            Mock Test-IsAdmin { $true }
             if (-not (Get-Command Get-StartApps -ErrorAction SilentlyContinue)) {
                 function global:Get-StartApps { }
             }
@@ -272,6 +273,18 @@ Describe 'setup.ps1' {
             Set-TaskbarPins
 
             Should -Invoke Restart-Explorer -Times 2 -Exactly
+        }
+
+        It 'records a clear failure without changing anything when not elevated' {
+            Mock Test-IsAdmin { $false }
+
+            Set-TaskbarPins
+
+            Test-Path $env:SETUP_SCRIPT_TASKBAR_LAYOUT_PATH | Should -BeFalse
+            Test-Path $script:TaskbarPolicyKey | Should -BeFalse
+            Should -Invoke Restart-Explorer -Times 0 -Exactly
+            $script:failedItems | Should -Be @('taskbar pins (run setup.ps1 from an Administrator prompt)')
+            Should -Invoke Write-Err -Times 1 -Exactly -ParameterFilter { $Message -like '*Administrator prompt*' }
         }
     }
 

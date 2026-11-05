@@ -88,9 +88,14 @@ function Write-Summary {
 # Bootstrap
 # ----------------------------------------
 
+function Test-IsAdmin {
+    $principal = [Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Test-Prerequisites {
     # Check for admin privileges
-    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $isAdmin = Test-IsAdmin
     if ($isAdmin) {
         Write-Success "Running with Administrator privileges"
     } else {
@@ -262,6 +267,13 @@ function Set-TaskbarPins {
 
     if ($alreadyApplied -and (Test-ShouldSkipInstalled)) {
         Write-Success "Taskbar pins already configured"
+        return
+    }
+
+    # Only Administrators can write under HKCU\Software\Policies.
+    if (-not (Test-IsAdmin)) {
+        $script:failedItems += "taskbar pins (run setup.ps1 from an Administrator prompt)"
+        Write-Err "Skipped taskbar pins: run setup.ps1 from an Administrator prompt (Terminal (Admin)) to pin apps to the taskbar"
         return
     }
 
