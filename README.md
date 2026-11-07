@@ -360,6 +360,10 @@ If the error persists, update App Installer through Microsoft Store and check wh
 
 Pin both repos to the same release: check out the tag in `machine-setup` (a detached HEAD), then pass it to setup or the launcher install with `--ref` (`-Ref` on Windows) or the `BOOTH_RELEASE` environment variable. The scripts then fetch tags in `repo-setup-scripts` with `--force` (so a moved `v1` follows the remote) and check out the tag there too. They stop with an error, without changing the checkout, if the tag doesn't exist or the checkout has local changes (stash or discard them, then re-run).
 
+Always move to a new release with `install-demo-launcher` (or setup) and the release, not with `git checkout` in `repo-setup-scripts` alone: the scripts also rewrite the installed loader. Then restart the GitHub Copilot app (on Windows, fully quit it from the system tray) so it loads the launcher from that release.
+
+If `v1` doesn't exist yet in both repos, the commands below stop with "doesn't exist". Until the first release is tagged, track `main` (see below).
+
 On macOS:
 
 ```bash
