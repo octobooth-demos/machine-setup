@@ -80,7 +80,7 @@ Clone this repo so you can update the scripts before each run. A ZIP download ne
    git -C ~/repos/machine-setup checkout --detach v1
    ```
 
-   To track the latest changes on `main` instead, run `git -C ~/repos/machine-setup pull`.
+   To track the latest changes on `main` instead, run `git -C ~/repos/machine-setup checkout main`, then `git -C ~/repos/machine-setup pull` (see [Using a release](#using-a-release) for switching the Demo Launcher back too).
 
 **Fallback for a new Mac without Git:** [download the ZIP](https://github.com/octobooth-demos/machine-setup/archive/refs/heads/main.zip) and run commands from the extracted `machine-setup-main` folder. Keep all files together, because the scripts need `config.json` and `setup.sh` also needs the `iterm2/` folder. Setup installs the Xcode Command Line Tools and Git, so switch to a clone afterward. If you stay on the ZIP, download it again before re-running any script.
 
@@ -206,7 +206,7 @@ git -C "$HOME\repos\machine-setup" fetch --tags --force
 git -C "$HOME\repos\machine-setup" checkout --detach v1
 ```
 
-To track the latest changes on `main` instead, run `git -C "$HOME\repos\machine-setup" pull`.
+To track the latest changes on `main` instead, run `git -C "$HOME\repos\machine-setup" checkout main`, then `git -C "$HOME\repos\machine-setup" pull` (see [Using a release](#using-a-release) for switching the Demo Launcher back too).
 
 #### 4. Allow the script to run
 
@@ -399,7 +399,7 @@ cd "$HOME\repos\machine-setup"
 .\install-demo-launcher.ps1
 ```
 
-`setup.sh` does the same without a release. `setup.ps1` doesn't update an existing `repo-setup-scripts` checkout, so on Windows run `install-demo-launcher.ps1` to switch back; `setup.ps1` warns if the checkout is still pinned.
+`setup.sh` and `setup.ps1` also switch a pinned checkout back to `main` when run without a release. If you set `BOOTH_RELEASE`, clear it first, or the scripts keep using that release: `unset BOOTH_RELEASE` on macOS, or `Remove-Item Env:BOOTH_RELEASE` on Windows (and, if you saved it as a user variable, `[Environment]::SetEnvironmentVariable("BOOTH_RELEASE", $null, "User")`).
 
 To cut a release, after testing on a booth Mac and a Windows machine, tag the same commit you tested in **both** repos and move the major tag:
 

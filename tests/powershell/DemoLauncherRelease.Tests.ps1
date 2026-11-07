@@ -176,13 +176,22 @@ Describe 'Demo Launcher releases' {
             Should -Invoke Write-Warn -Times 0 -Exactly
         }
 
-        It 'warns that a pinned checkout stays pinned without a release' {
+        It 'moves a pinned checkout back to main and pulls without a release' {
             Sync-DemoLauncherRelease -Release v1 | Should -BeTrue
 
             Sync-DemoLauncherRelease -Release '' | Should -BeTrue
 
+            Test-Detached | Should -BeFalse
+            Get-Head $script:checkout | Should -Be (Get-Head $script:work 'main')
+        }
+
+        It 'keeps a pinned checkout with local changes and skips the loader' {
+            Sync-DemoLauncherRelease -Release v1 | Should -BeTrue
+            [System.IO.File]::WriteAllText((Join-Path $script:checkout 'file.txt'), 'local')
+
+            Sync-DemoLauncherRelease -Release '' | Should -BeFalse
+
             Test-Detached | Should -BeTrue
-            Should -Invoke Write-Warn -Times 1 -Exactly -ParameterFilter { $Message -like '*still pinned*' }
         }
 
         It 'prefers -Ref over BOOTH_RELEASE' {

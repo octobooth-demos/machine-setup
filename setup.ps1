@@ -889,22 +889,23 @@ function Restore-DemoLauncherDefaultBranch {
     return $true
 }
 
-# setup.ps1 doesn't update existing clones, so it only pins repo-setup-scripts when a
-# release is requested. Returns $false if the loader shouldn't be (re)written.
+# Pins repo-setup-scripts to the requested release, or, without one, moves a checkout that's
+# on a release back to main (like setup.sh). setup.ps1 otherwise leaves existing clones as
+# they are. Returns $false if the loader shouldn't be (re)written.
 function Sync-DemoLauncherRelease {
     param([string]$Release)
 
     $checkout = Get-DemoLauncherRepoDir
     if (-not (Test-Path -LiteralPath (Join-Path $checkout ".git"))) { return $true }
-    if (-not $Release) {
-        if (Test-GitDetachedHead -Target $checkout) {
-            Write-Warn "$checkout is still pinned to a release. Run .\install-demo-launcher.ps1 without -Ref to track main again."
-        }
-        return $true
-    }
+    if (-not $Release -and -not (Test-GitDetachedHead -Target $checkout)) { return $true }
     # Install-DemoLauncher reports an untrusted origin, so don't fetch from it here
     if (-not (Test-DemoLauncherRemote -Target $checkout)) { return $true }
-    return (Switch-DemoLauncherRelease -Target $checkout -Ref $Release)
+    if ($Release) { return (Switch-DemoLauncherRelease -Target $checkout -Ref $Release) }
+
+    if (-not (Restore-DemoLauncherDefaultBranch -Target $checkout)) { return $false }
+    git -C $checkout pull --ff-only --quiet 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) { Write-Warn "Couldn't fast-forward $checkout; using it as is." }
+    return $true
 }
 
 function Install-DemoLauncher {
