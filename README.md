@@ -443,10 +443,11 @@ The loader is `$env:COPILOT_HOME\extensions\demo-launcher\extension.mjs` (`$HOME
 
 #### Install or update the launcher on Windows
 
-Before each booth day, update the checkout and loader, then fully quit and reopen the GitHub Copilot app so it loads the new launcher. From an up-to-date clone of this repo, in a regular (non-administrator) PowerShell:
+Before each booth day, update the checkout and loader, then fully quit and reopen the GitHub Copilot app so it loads the new launcher. From this repo at the release the booth uses (see [Using a release](#using-a-release)), in a regular (non-administrator) PowerShell:
 
 ```powershell
-git -C "$HOME\repos\machine-setup" pull
+git -C "$HOME\repos\machine-setup" fetch --tags --force
+git -C "$HOME\repos\machine-setup" checkout --detach v1
 cd "$HOME\repos\machine-setup"
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 .\install-demo-launcher.ps1 -Ref v1

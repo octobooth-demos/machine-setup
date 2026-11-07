@@ -782,8 +782,8 @@ install_demo_launcher() {
     local loader="${COPILOT_HOME:-$HOME/.copilot}/extensions/demo-launcher/extension.mjs"
 
     if [[ -d "$(demo_launcher_repo_dir)/.git" ]]; then
-        if ! sync_demo_launcher_repo && [[ -n "$BOOTH_RELEASE" ]]; then
-            log_error "Demo Launcher not updated, because repo-setup-scripts isn't at release $BOOTH_RELEASE"
+        if ! sync_demo_launcher_repo; then
+            log_error "Demo Launcher not updated, because repo-setup-scripts isn't at ${BOOTH_RELEASE:-its default branch}"
             return
         fi
     fi
@@ -793,7 +793,8 @@ install_demo_launcher() {
         return
     fi
 
-    if should_skip_installed && [[ -f "$loader" ]]; then
+    # A release run always rewrites the loader, so it matches the checked-out release
+    if [[ -z "$BOOTH_RELEASE" ]] && should_skip_installed && [[ -f "$loader" ]]; then
         log_info "Demo Launcher already installed, skipping..."
         return
     fi

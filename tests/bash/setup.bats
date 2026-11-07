@@ -729,6 +729,38 @@ release_commit() {
     [[ " ${failed_items[*]} " == *"release: octobooth-demos/repo-setup-scripts at v9"* ]]
 }
 
+@test "install_demo_launcher rewrites an existing loader for a release" {
+    make_release_origin
+    mkdir -p "$RELEASE_REPO/.github/extensions/demo-launcher"
+    printf '#!/bin/bash\necho run >> "$INSTALL_LOG"\n' > "$RELEASE_REPO/.github/extensions/demo-launcher/install.sh"
+    mkdir -p "$COPILOT_HOME/extensions/demo-launcher"
+    touch "$COPILOT_HOME/extensions/demo-launcher/extension.mjs"
+    export INSTALL_LOG="$BATS_TEST_TMPDIR/install.log"
+    load_script
+
+    BOOTH_RELEASE=v1
+    install_demo_launcher
+
+    [ "$(wc -l < "$INSTALL_LOG")" -eq 1 ]
+}
+
+@test "install_demo_launcher doesn't run install.sh when a pinned checkout can't return to main" {
+    make_release_origin
+    git -C "$RELEASE_REPO" checkout -q --detach v1
+    echo local > "$RELEASE_REPO/file.txt"
+    mkdir -p "$RELEASE_REPO/.github/extensions/demo-launcher"
+    printf '#!/bin/bash\necho run >> "$INSTALL_LOG"\n' > "$RELEASE_REPO/.github/extensions/demo-launcher/install.sh"
+    export INSTALL_LOG="$BATS_TEST_TMPDIR/install.log"
+    load_script
+
+    FORCE_REINSTALL=true
+    failed_items=()
+    install_demo_launcher
+
+    [[ ! -f "$INSTALL_LOG" ]]
+    [ "${#failed_items[@]}" -eq 1 ]
+}
+
 @test "check_demo_launcher_prereqs fails with login instructions when gh is logged out" {
     mkdir -p "$BATS_TEST_TMPDIR/bin"
     printf '#!/bin/bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/gh"
