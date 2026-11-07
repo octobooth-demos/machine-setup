@@ -320,7 +320,7 @@ red_component() {
 
     run configure_iterm2
     [ "$status" -eq 1 ]
-    [[ ! -f "$PREFS_STORE" ]]
+    [[ ! -f "$PREFS_STORE" ]] || false
 }
 
 # Stubs curl to "download" a small zip shaped like monaspace-frozen-v*.zip
@@ -352,8 +352,8 @@ STUB
 
     run install_monaspace_frozen
     [ "$status" -eq 0 ]
-    [[ -f "$HOME/Library/Fonts/MonaspaceNeonFrozen-Regular.ttf" ]]
-    [[ -f "$HOME/Library/Fonts/MonaspaceNeonFrozen-Bold.ttf" ]]
+    [[ -f "$HOME/Library/Fonts/MonaspaceNeonFrozen-Regular.ttf" ]] || false
+    [[ -f "$HOME/Library/Fonts/MonaspaceNeonFrozen-Bold.ttf" ]] || false
     [ "$(cat "$HOME/Library/Fonts/.monaspace-frozen-version")" = "1.400" ]
 
     run grep -cF "releases/download/v1.400/monaspace-frozen-v1.400.zip" "$CURL_LOG"
@@ -377,7 +377,7 @@ STUB
 
     run install_monaspace_frozen
     [ "$status" -eq 1 ]
-    [[ ! -f "$HOME/Library/Fonts/.monaspace-frozen-version" ]]
+    [[ ! -f "$HOME/Library/Fonts/.monaspace-frozen-version" ]] || false
 }
 
 @test "config turns on ligatures and turns off thin strokes in iTerm2" {
@@ -631,7 +631,7 @@ release_commit() {
 
     BOOTH_RELEASE=v1 run sync_demo_launcher_repo
     [ "$status" -eq 0 ]
-    [[ "$output" == *"pinned to release v1"* ]]
+    [[ "$output" == *"pinned to release v1"* ]] || false
     run git -C "$RELEASE_REPO" symbolic-ref -q HEAD
     [ "$status" -ne 0 ]
     [ "$(git -C "$RELEASE_REPO" rev-parse HEAD)" = "$(git -C "$RELEASE_WORK" rev-parse v1.0.0)" ]
@@ -661,9 +661,23 @@ release_commit() {
 
     BOOTH_RELEASE=v9 run sync_demo_launcher_repo
     [ "$status" -eq 1 ]
-    [[ "$output" == *"Release tag v9 doesn't exist"* ]]
+    [[ "$output" == *"Release tag v9 doesn't exist"* ]] || false
     [ "$(git -C "$RELEASE_REPO" symbolic-ref --short HEAD)" = main ]
     [ "$(git -C "$RELEASE_REPO" rev-parse HEAD)" = "$before" ]
+}
+
+@test "sync_demo_launcher_repo refuses a release tag withdrawn on origin" {
+    make_release_origin
+    load_script
+    git -C "$RELEASE_REPO" fetch -q --tags origin
+    git -C "$RELEASE_WORK" push -q origin :refs/tags/v1.0.0
+
+    BOOTH_RELEASE=v1.0.0 run sync_demo_launcher_repo
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Release tag v1.0.0 isn't on GitHub (it may have been withdrawn)"* ]] || false
+    [ "$(git -C "$RELEASE_REPO" symbolic-ref --short HEAD)" = main ]
+    run git -C "$RELEASE_REPO" rev-parse -q --verify refs/tags/v1.0.0
+    [ "$status" -ne 0 ]
 }
 
 @test "sync_demo_launcher_repo rejects an invalid release tag name" {
@@ -672,7 +686,7 @@ release_commit() {
 
     BOOTH_RELEASE="--upload-pack=x" run sync_demo_launcher_repo
     [ "$status" -eq 1 ]
-    [[ "$output" == *"isn't a valid tag name"* ]]
+    [[ "$output" == *"isn't a valid tag name"* ]] || false
 }
 
 @test "sync_demo_launcher_repo refuses to pin a checkout with local changes" {
@@ -682,8 +696,8 @@ release_commit() {
 
     BOOTH_RELEASE=v1 run sync_demo_launcher_repo
     [ "$status" -eq 1 ]
-    [[ "$output" == *"has local changes"* ]]
-    [[ "$output" == *"stash"* ]]
+    [[ "$output" == *"has local changes"* ]] || false
+    [[ "$output" == *"stash"* ]] || false
     [ "$(git -C "$RELEASE_REPO" symbolic-ref --short HEAD)" = main ]
     [ "$(cat "$RELEASE_REPO/file.txt")" = local ]
 }
@@ -696,7 +710,7 @@ release_commit() {
 
     BOOTH_RELEASE="" run sync_demo_launcher_repo
     [ "$status" -eq 0 ]
-    [[ "$output" == *"was pinned to v1"*"switching back to main"* ]]
+    [[ "$output" == *"was pinned to v1"*"switching back to main"* ]] || false
     [ "$(git -C "$RELEASE_REPO" symbolic-ref --short HEAD)" = main ]
     [ "$(git -C "$RELEASE_REPO" rev-parse HEAD)" = "$(git -C "$RELEASE_WORK" rev-parse main)" ]
 }
@@ -709,7 +723,7 @@ release_commit() {
 
     BOOTH_RELEASE="" run sync_demo_launcher_repo
     [ "$status" -eq 1 ]
-    [[ "$output" == *"has local changes"* ]]
+    [[ "$output" == *"has local changes"* ]] || false
     run git -C "$RELEASE_REPO" symbolic-ref -q HEAD
     [ "$status" -ne 0 ]
 }
@@ -725,8 +739,8 @@ release_commit() {
     failed_items=()
     install_demo_launcher
 
-    [[ ! -f "$INSTALL_LOG" ]]
-    [[ " ${failed_items[*]} " == *"release: octobooth-demos/repo-setup-scripts at v9"* ]]
+    [[ ! -f "$INSTALL_LOG" ]] || false
+    [[ " ${failed_items[*]} " == *"release: octobooth-demos/repo-setup-scripts at v9"* ]] || false
 }
 
 @test "install_demo_launcher rewrites an existing loader for a release" {
@@ -757,7 +771,7 @@ release_commit() {
     failed_items=()
     install_demo_launcher
 
-    [[ ! -f "$INSTALL_LOG" ]]
+    [[ ! -f "$INSTALL_LOG" ]] || false
     [ "${#failed_items[@]}" -eq 1 ]
 }
 
@@ -771,7 +785,7 @@ release_commit() {
 
     run check_demo_launcher_prereqs
     [ "$status" -eq 1 ]
-    [[ "$output" == *"gh auth login -h github.com -s codespace,delete_repo,project,workflow"* ]]
+    [[ "$output" == *"gh auth login -h github.com -s codespace,delete_repo,project,workflow"* ]] || false
 }
 
 @test "check_demo_launcher_prereqs warns about missing scopes but continues" {
@@ -782,7 +796,7 @@ release_commit() {
 
     run check_demo_launcher_prereqs
     [ "$status" -eq 0 ]
-    [[ "$output" == *"gh auth refresh -h github.com -s delete_repo,project,workflow"* ]]
+    [[ "$output" == *"gh auth refresh -h github.com -s delete_repo,project,workflow"* ]] || false
 }
 
 @test "sourcing install-demo-launcher.sh does not execute it" {
@@ -801,7 +815,7 @@ release_commit() {
 @test "install-demo-launcher.sh requires a tag after --ref" {
     run bash "$REPO_ROOT/install-demo-launcher.sh" --ref
     [ "$status" -eq 2 ]
-    [[ "$output" == *"--ref v1"* ]]
+    [[ "$output" == *"--ref v1"* ]] || false
 }
 
 @test "install-demo-launcher.sh --ref sets the release" {
@@ -812,16 +826,16 @@ release_commit() {
     mkdir -p "$HOME/repos/repo-setup-scripts/.git"
 
     run demo_launcher_main --ref v1.2.0
-    [[ "$output" == *"release=v1.2.0"* ]]
+    [[ "$output" == *"release=v1.2.0"* ]] || false
 
     BOOTH_RELEASE=v1 run demo_launcher_main
-    [[ "$output" == *"release=v1"* ]]
+    [[ "$output" == *"release=v1"* ]] || false
 }
 
 @test "setup.sh rejects unknown arguments" {
     run bash "$REPO_ROOT/setup.sh" --bogus
     [ "$status" -eq 2 ]
-    [[ "$output" == *"--ref v1"* ]]
+    [[ "$output" == *"--ref v1"* ]] || false
 }
 
 # Stubs xcode-select so `-p` succeeds once the CLT "install" has had
@@ -875,7 +889,7 @@ STUB
 
     run install_xcode_clt
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Xcode Command Line Tools installed"* ]]
+    [[ "$output" == *"Xcode Command Line Tools installed"* ]] || false
 
     run grep -c -F -- "--install" "$XCODE_SELECT_LOG"
     [ "$output" = "1" ]
@@ -888,7 +902,7 @@ STUB
 
     run install_xcode_clt
     [ "$status" -eq 1 ]
-    [[ "$output" == *"xcode-select --install"* ]]
+    [[ "$output" == *"xcode-select --install"* ]] || false
 }
 
 # Stubs defaultbrowser: lists browsers with "*" on $DEFAULT_BROWSER_FILE's
@@ -926,7 +940,7 @@ STUB
 
     run set_default_browser_chrome < /dev/null
     [ "$status" -eq 0 ]
-    [[ "$output" == *"already the default browser"* ]]
+    [[ "$output" == *"already the default browser"* ]] || false
 
     run grep -Fx "chrome" "$DEFAULTBROWSER_LOG"
     [ "$status" -ne 0 ]
@@ -938,7 +952,7 @@ STUB
 
     run set_default_browser_chrome <<< ""
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Chrome is now the default browser"* ]]
+    [[ "$output" == *"Chrome is now the default browser"* ]] || false
     [ "$(cat "$DEFAULT_BROWSER_FILE")" = "chrome" ]
 }
 
@@ -949,7 +963,7 @@ STUB
 
     run set_default_browser_chrome <<< ""
     [ "$status" -eq 1 ]
-    [[ "$output" == *"System Settings"* ]]
+    [[ "$output" == *"System Settings"* ]] || false
 }
 
 # Stubs dockutil, defaults, and killall with a Dock backed by files, and
@@ -1040,8 +1054,8 @@ STUB
 
     run configure_dock
     [ "$status" -eq 1 ]
-    [[ "$output" == *"Could not hide suggested and recent apps in the Dock"* ]]
-    [[ "$output" != *"Hid suggested and recent apps"* ]]
+    [[ "$output" == *"Could not hide suggested and recent apps in the Dock"* ]] || false
+    [[ "$output" != *"Hid suggested and recent apps"* ]] || false
     [ ! -f "$SHOW_RECENTS_FILE" ]
 
     run grep -E 'killall' "$DOCK_LOG"
@@ -1056,7 +1070,7 @@ STUB
 
     run configure_dock
     [ "$status" -eq 1 ]
-    [[ "$output" == *"iTerm not found"* ]]
+    [[ "$output" == *"iTerm not found"* ]] || false
 
     run grep -cxF "iTerm" "$DOCK_FILE"
     [ "$output" = "0" ]
@@ -1071,11 +1085,11 @@ STUB
 
     run configure_dock
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Google Chrome is already in the Dock"* ]]
+    [[ "$output" == *"Google Chrome is already in the Dock"* ]] || false
 
     run grep -cxF "Google Chrome" "$DOCK_FILE"
     [ "$output" = "1" ]
 
     run grep -F 'dockutil --add' "$DOCK_LOG"
-    [[ "$output" != *"Google Chrome"* ]]
+    [[ "$output" != *"Google Chrome"* ]] || false
 }

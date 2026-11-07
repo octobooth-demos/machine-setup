@@ -706,6 +706,21 @@ checkout_booth_release() {
         return 1
     fi
 
+    # fetch --tags doesn't remove tags deleted on origin, so check origin still has it
+    local remote_status=0
+    git -C "$target" ls-remote --quiet --exit-code --tags origin "refs/tags/$ref" > /dev/null || remote_status=$?
+    if [[ $remote_status -eq 2 ]]; then
+        if git -C "$target" tag -d "$ref" > /dev/null 2>&1; then
+            log_error "Release tag $ref isn't on GitHub (it may have been withdrawn), so its local copy was removed. Use the major the booth uses (currently v1), or run without a release to track main."
+        else
+            log_error "Release tag $ref doesn't exist in $DEMO_LAUNCHER_REPO. Use the major the booth uses (currently v1), or run without a release to track main."
+        fi
+        return 1
+    elif [[ $remote_status -ne 0 ]]; then
+        log_error "Couldn't check $DEMO_LAUNCHER_REPO for release tag $ref. Check the network and the GitHub CLI login, then re-run."
+        return 1
+    fi
+
     if ! git -C "$target" rev-parse --quiet --verify "refs/tags/$ref^{commit}" > /dev/null; then
         log_error "Release tag $ref doesn't exist in $DEMO_LAUNCHER_REPO. Use the major the booth uses (currently v1), or run without a release to track main."
         return 1

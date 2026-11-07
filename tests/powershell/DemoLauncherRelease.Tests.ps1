@@ -116,6 +116,19 @@ Describe 'Demo Launcher releases' {
         Test-Path (Get-DemoLauncherLoaderPath) | Should -BeFalse
     }
 
+    It 'refuses a release tag withdrawn on origin and deletes the local copy' {
+        git -C $script:checkout fetch -q --tags origin 2>$null
+        Invoke-TestGit -C $script:work push -q origin :refs/tags/v1.0.0 | Out-Null
+
+        Invoke-DemoLauncherMain -Ref v1.0.0 | Should -Be 1
+
+        Should -Invoke Write-Err -ParameterFilter { $Message -like "Release tag v1.0.0 isn't on GitHub (it may have been withdrawn)*" }
+        Test-Detached | Should -BeFalse
+        git -C $script:checkout rev-parse -q --verify refs/tags/v1.0.0 2>$null | Out-Null
+        $LASTEXITCODE | Should -Not -Be 0
+        Test-Path (Get-DemoLauncherLoaderPath) | Should -BeFalse
+    }
+
     It 'rejects an invalid release tag name' {
         Invoke-DemoLauncherMain -Ref '--upload-pack=x' | Should -Be 1
 

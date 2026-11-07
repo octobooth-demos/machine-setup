@@ -839,6 +839,24 @@ function Switch-DemoLauncherRelease {
         return $false
     }
 
+    # fetch --tags doesn't remove tags deleted on origin, so check origin still has it
+    git -C $Target ls-remote --quiet --exit-code --tags origin "refs/tags/$Ref" 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 2) {
+        $script:failedItems += $failure
+        git -C $Target tag -d $Ref 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Err "Release tag $Ref isn't on GitHub (it may have been withdrawn), so its local copy was removed. Use the major the booth uses (currently v1), or run without a release to track main."
+        } else {
+            Write-Err "Release tag $Ref doesn't exist in $script:TrustedDemoLauncherRepo. Use the major the booth uses (currently v1), or run without a release to track main."
+        }
+        return $false
+    }
+    if ($LASTEXITCODE -ne 0) {
+        $script:failedItems += $failure
+        Write-Err "Couldn't check $script:TrustedDemoLauncherRepo for release tag $Ref. Check the network and the GitHub CLI login, then re-run."
+        return $false
+    }
+
     git -C $Target rev-parse --quiet --verify "refs/tags/$Ref^{commit}" 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
         $script:failedItems += $failure
