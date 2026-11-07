@@ -598,6 +598,137 @@ STUB
     [ "$(wc -l < "$INSTALL_LOG")" -eq 1 ]
 }
 
+# Creates a bare origin for repo-setup-scripts with a main branch, tags v1.0.0
+# and a moving v1 on the first commit, and a newer untagged commit on main.
+# Clones it into ~/repos/repo-setup-scripts at the first commit.
+make_release_origin() {
+    export RELEASE_ORIGIN="$BATS_TEST_TMPDIR/origin.git"
+    export RELEASE_WORK="$BATS_TEST_TMPDIR/work"
+    export RELEASE_REPO="$HOME/repos/repo-setup-scripts"
+    git -c init.defaultBranch=main init -q --bare "$RELEASE_ORIGIN"
+    git clone -q "$RELEASE_ORIGIN" "$RELEASE_WORK" 2>/dev/null
+    git -C "$RELEASE_WORK" checkout -q -b main
+    echo one > "$RELEASE_WORK/file.txt"
+    git -C "$RELEASE_WORK" add file.txt
+    git -C "$RELEASE_WORK" -c user.name=t -c user.email=t@t commit -q -m one
+    git -C "$RELEASE_WORK" tag v1.0.0
+    git -C "$RELEASE_WORK" tag v1
+    git -C "$RELEASE_WORK" push -q origin main --tags
+    git clone -q "$RELEASE_ORIGIN" "$RELEASE_REPO"
+    release_commit two
+}
+
+# Commits a change to main in the origin
+release_commit() {
+    echo "$1" > "$RELEASE_WORK/file.txt"
+    git -C "$RELEASE_WORK" -c user.name=t -c user.email=t@t commit -q -am "$1"
+    git -C "$RELEASE_WORK" push -q origin main
+}
+
+@test "sync_demo_launcher_repo pins repo-setup-scripts to a release tag" {
+    make_release_origin
+    load_script
+
+    BOOTH_RELEASE=v1 run sync_demo_launcher_repo
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"pinned to release v1"* ]]
+    run git -C "$RELEASE_REPO" symbolic-ref -q HEAD
+    [ "$status" -ne 0 ]
+    [ "$(git -C "$RELEASE_REPO" rev-parse HEAD)" = "$(git -C "$RELEASE_WORK" rev-parse v1.0.0)" ]
+}
+
+@test "sync_demo_launcher_repo follows a moved major tag" {
+    make_release_origin
+    load_script
+    BOOTH_RELEASE=v1 run sync_demo_launcher_repo
+    [ "$status" -eq 0 ]
+
+    git -C "$RELEASE_WORK" tag v1.1.0
+    git -C "$RELEASE_WORK" tag -f v1 > /dev/null
+    git -C "$RELEASE_WORK" push -q origin v1.1.0
+    git -C "$RELEASE_WORK" push -q -f origin v1
+
+    BOOTH_RELEASE=v1 run sync_demo_launcher_repo
+    [ "$status" -eq 0 ]
+    [ "$(git -C "$RELEASE_REPO" rev-parse HEAD)" = "$(git -C "$RELEASE_WORK" rev-parse v1.1.0)" ]
+}
+
+@test "sync_demo_launcher_repo fails clearly when the release tag doesn't exist" {
+    make_release_origin
+    load_script
+    local before
+    before=$(git -C "$RELEASE_REPO" rev-parse HEAD)
+
+    BOOTH_RELEASE=v9 run sync_demo_launcher_repo
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Release tag v9 doesn't exist"* ]]
+    [ "$(git -C "$RELEASE_REPO" symbolic-ref --short HEAD)" = main ]
+    [ "$(git -C "$RELEASE_REPO" rev-parse HEAD)" = "$before" ]
+}
+
+@test "sync_demo_launcher_repo rejects an invalid release tag name" {
+    make_release_origin
+    load_script
+
+    BOOTH_RELEASE="--upload-pack=x" run sync_demo_launcher_repo
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"isn't a valid tag name"* ]]
+}
+
+@test "sync_demo_launcher_repo refuses to pin a checkout with local changes" {
+    make_release_origin
+    echo local > "$RELEASE_REPO/file.txt"
+    load_script
+
+    BOOTH_RELEASE=v1 run sync_demo_launcher_repo
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"has local changes"* ]]
+    [[ "$output" == *"stash"* ]]
+    [ "$(git -C "$RELEASE_REPO" symbolic-ref --short HEAD)" = main ]
+    [ "$(cat "$RELEASE_REPO/file.txt")" = local ]
+}
+
+@test "sync_demo_launcher_repo switches a pinned checkout back to main without a release" {
+    make_release_origin
+    load_script
+    BOOTH_RELEASE=v1 run sync_demo_launcher_repo
+    [ "$status" -eq 0 ]
+
+    BOOTH_RELEASE="" run sync_demo_launcher_repo
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"was pinned to v1"*"switching back to main"* ]]
+    [ "$(git -C "$RELEASE_REPO" symbolic-ref --short HEAD)" = main ]
+    [ "$(git -C "$RELEASE_REPO" rev-parse HEAD)" = "$(git -C "$RELEASE_WORK" rev-parse main)" ]
+}
+
+@test "sync_demo_launcher_repo won't leave a pinned release with local changes" {
+    make_release_origin
+    load_script
+    BOOTH_RELEASE=v1 run sync_demo_launcher_repo
+    echo local > "$RELEASE_REPO/file.txt"
+
+    BOOTH_RELEASE="" run sync_demo_launcher_repo
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"has local changes"* ]]
+    run git -C "$RELEASE_REPO" symbolic-ref -q HEAD
+    [ "$status" -ne 0 ]
+}
+
+@test "install_demo_launcher doesn't run install.sh when the release can't be checked out" {
+    make_release_origin
+    mkdir -p "$RELEASE_REPO/.github/extensions/demo-launcher"
+    printf '#!/bin/bash\necho run >> "$INSTALL_LOG"\n' > "$RELEASE_REPO/.github/extensions/demo-launcher/install.sh"
+    export INSTALL_LOG="$BATS_TEST_TMPDIR/install.log"
+    load_script
+
+    BOOTH_RELEASE=v9
+    failed_items=()
+    install_demo_launcher
+
+    [[ ! -f "$INSTALL_LOG" ]]
+    [[ " ${failed_items[*]} " == *"release: octobooth-demos/repo-setup-scripts at v9"* ]]
+}
+
 @test "check_demo_launcher_prereqs fails with login instructions when gh is logged out" {
     mkdir -p "$BATS_TEST_TMPDIR/bin"
     printf '#!/bin/bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/gh"
@@ -633,6 +764,32 @@ STUB
     run bash "$REPO_ROOT/install-demo-launcher.sh" --bogus
     [ "$status" -eq 2 ]
     [[ "$output" == *"Usage:"* ]]
+}
+
+@test "install-demo-launcher.sh requires a tag after --ref" {
+    run bash "$REPO_ROOT/install-demo-launcher.sh" --ref
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"--ref v1"* ]]
+}
+
+@test "install-demo-launcher.sh --ref sets the release" {
+    source "$REPO_ROOT/install-demo-launcher.sh"
+    load_config() { :; }
+    check_demo_launcher_prereqs() { :; }
+    install_demo_launcher() { echo "release=$BOOTH_RELEASE"; }
+    mkdir -p "$HOME/repos/repo-setup-scripts/.git"
+
+    run demo_launcher_main --ref v1.2.0
+    [[ "$output" == *"release=v1.2.0"* ]]
+
+    BOOTH_RELEASE=v1 run demo_launcher_main
+    [[ "$output" == *"release=v1"* ]]
+}
+
+@test "setup.sh rejects unknown arguments" {
+    run bash "$REPO_ROOT/setup.sh" --bogus
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"--ref v1"* ]]
 }
 
 # Stubs xcode-select so `-p` succeeds once the CLT "install" has had
