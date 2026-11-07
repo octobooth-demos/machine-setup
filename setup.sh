@@ -676,6 +676,23 @@ check_demo_launcher_prereqs() {
     fi
 }
 
+# Returns 0 if the checkout at $1 has origin set to $DEMO_LAUNCHER_REPO on github.com
+# (https or ssh, with or without .git), the only repo trusted to run in every Copilot session
+demo_launcher_remote_trusted() {
+    local url
+    url=$(git -C "$1" config --get remote.origin.url 2>/dev/null) || return 1
+    url=$(printf '%s' "$url" | tr '[:upper:]' '[:lower:]')
+    url="${url%/}"
+    url="${url%.git}"
+    case "$url" in
+        https://github.com/*) url="${url#https://github.com/}" ;;
+        git@github.com:*) url="${url#git@github.com:}" ;;
+        ssh://git@github.com/*) url="${url#ssh://git@github.com/}" ;;
+        *) return 1 ;;
+    esac
+    [[ "$url" == "$(printf '%s' "$DEMO_LAUNCHER_REPO" | tr '[:upper:]' '[:lower:]')" ]]
+}
+
 # Returns 0 if the checkout at $1 has no uncommitted changes to tracked files
 git_worktree_clean() {
     [[ -z "$(git -C "$1" status --porcelain --untracked-files=no 2>/dev/null)" ]]
@@ -765,12 +782,21 @@ sync_demo_launcher_repo() {
     target=$(demo_launcher_repo_dir)
     shown="${target/#$HOME/~}"
 
+    local fresh_clone=false
     if [[ ! -d "$target/.git" ]]; then
         mkdir -p "$(dirname "$target")"
         try_install "clone: $DEMO_LAUNCHER_REPO" gh repo clone "$DEMO_LAUNCHER_REPO" "$target"
         [[ -d "$target/.git" ]] || return 1
-        [[ -z "$BOOTH_RELEASE" ]] && return 0
+        fresh_clone=true
     fi
+
+    # Checked before any fetch, pull, or checkout, and before install.sh runs from the checkout
+    if ! demo_launcher_remote_trusted "$target"; then
+        failed_items+=("update: $DEMO_LAUNCHER_REPO ($shown origin isn't $DEMO_LAUNCHER_REPO)")
+        log_error "$shown doesn't point at $DEMO_LAUNCHER_REPO, so it wasn't updated and the Demo Launcher wasn't installed. Check: git -C \"$shown\" remote -v"
+        return 1
+    fi
+    [[ "$fresh_clone" == true && -z "$BOOTH_RELEASE" ]] && return 0
 
     if [[ -n "$BOOTH_RELEASE" ]]; then
         if ! checkout_booth_release "$target" "$BOOTH_RELEASE"; then

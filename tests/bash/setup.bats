@@ -573,11 +573,20 @@ STUB
     [ "$(wc -l < "$INSTALL_LOG")" -eq 2 ]
 }
 
+# Points the checkout's origin at the trusted GitHub URL, and redirects git to the
+# local test origin for that URL, so the origin check passes without network access
+trust_test_origin() {
+    local trusted="https://github.com/octobooth-demos/repo-setup-scripts.git"
+    git -C "$1" remote set-url origin "$trusted"
+    git -C "$1" config "url.$2.insteadOf" "$trusted"
+}
+
 @test "install_demo_launcher fast-forwards an existing repo-setup-scripts clone" {
     local origin="$BATS_TEST_TMPDIR/origin.git"
     local repo="$HOME/repos/repo-setup-scripts"
     git init -q --bare "$origin"
     git clone -q "$origin" "$repo"
+    trust_test_origin "$repo" "$origin"
     git -C "$repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
     git -C "$repo" push -q origin HEAD
 
@@ -615,6 +624,7 @@ make_release_origin() {
     git -C "$RELEASE_WORK" tag v1
     git -C "$RELEASE_WORK" push -q origin main --tags
     git clone -q "$RELEASE_ORIGIN" "$RELEASE_REPO"
+    trust_test_origin "$RELEASE_REPO" "$RELEASE_ORIGIN"
     release_commit two
 }
 
@@ -773,6 +783,59 @@ release_commit() {
 
     [[ ! -f "$INSTALL_LOG" ]] || false
     [ "${#failed_items[@]}" -eq 1 ]
+}
+
+@test "demo_launcher_remote_trusted accepts only the trusted repo on github.com" {
+    load_script
+    local repo="$BATS_TEST_TMPDIR/remote-check"
+    git init -q "$repo"
+    git -C "$repo" remote add origin x
+
+    local url
+    for url in https://github.com/octobooth-demos/repo-setup-scripts \
+        https://github.com/octobooth-demos/repo-setup-scripts.git \
+        https://github.com/octobooth-demos/repo-setup-scripts/ \
+        git@github.com:octobooth-demos/repo-setup-scripts.git \
+        ssh://git@github.com/Octobooth-Demos/repo-setup-scripts.git; do
+        git -C "$repo" remote set-url origin "$url"
+        demo_launcher_remote_trusted "$repo" || { echo "rejected $url"; false; }
+    done
+    for url in https://github.com/attacker/repo-setup-scripts.git \
+        https://ghe.example.com/octobooth-demos/repo-setup-scripts.git \
+        https://github.com/octobooth-demos/repo-setup-scripts-fork \
+        "$BATS_TEST_TMPDIR/origin.git"; do
+        git -C "$repo" remote set-url origin "$url"
+        ! demo_launcher_remote_trusted "$repo" || { echo "accepted $url"; false; }
+    done
+}
+
+@test "sync_demo_launcher_repo refuses an untrusted origin before fetching or installing" {
+    make_release_origin
+    mkdir -p "$RELEASE_REPO/.github/extensions/demo-launcher"
+    printf '#!/bin/bash\necho run >> "$INSTALL_LOG"\n' > "$RELEASE_REPO/.github/extensions/demo-launcher/install.sh"
+    export INSTALL_LOG="$BATS_TEST_TMPDIR/install.log"
+    git -C "$RELEASE_REPO" remote set-url origin https://github.com/attacker/repo-setup-scripts.git
+    git -C "$RELEASE_REPO" config "url.$RELEASE_ORIGIN.insteadOf" https://github.com/attacker/repo-setup-scripts.git
+    git -C "$RELEASE_WORK" tag v2.0.0
+    git -C "$RELEASE_WORK" push -q origin v2.0.0
+    load_script
+    local before
+    before=$(git -C "$RELEASE_REPO" rev-parse HEAD)
+
+    BOOTH_RELEASE=v2.0.0 run sync_demo_launcher_repo
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"doesn't point at octobooth-demos/repo-setup-scripts"* ]] || false
+    [[ "$output" != *"Fetching"* ]] || false
+    [ "$(git -C "$RELEASE_REPO" rev-parse HEAD)" = "$before" ]
+    run git -C "$RELEASE_REPO" rev-parse -q --verify refs/tags/v2.0.0
+    [ "$status" -ne 0 ]
+
+    BOOTH_RELEASE=""
+    FORCE_REINSTALL=true
+    failed_items=()
+    install_demo_launcher
+    [[ ! -f "$INSTALL_LOG" ]] || false
+    [ "$(git -C "$RELEASE_REPO" rev-parse HEAD)" = "$before" ]
 }
 
 @test "check_demo_launcher_prereqs fails with login instructions when gh is logged out" {
