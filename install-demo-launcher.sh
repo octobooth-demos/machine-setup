@@ -6,9 +6,12 @@
 #
 # Usage: bash install-demo-launcher.sh [--ref <tag>] [--uninstall]
 #
-#   --ref <tag>  Pin ~/repos/repo-setup-scripts to a release tag: the major the
-#                booth uses (v1) or a full version (v1.2.0). Also read from
-#                BOOTH_RELEASE. Without it, the checkout tracks main.
+#   --ref <tag>  Check out ~/repos/repo-setup-scripts at a release tag: the
+#                major the booth uses (v1) or a full version (v1.2.0). Also
+#                read from BOOTH_RELEASE. Without one, a checkout pinned to a
+#                release (detached HEAD) switches back to its default branch
+#                and pulls it (untested main), while a checkout on a branch
+#                stays on that branch and pulls it. setup.sh does the same.
 #
 
 # setup.sh only runs main when executed directly, so sourcing it just loads its helpers

@@ -11,9 +11,11 @@
     Copilot app can open it from any chat. Doesn't need admin. Safe to re-run.
 
 .PARAMETER Ref
-    Pins the checkout to a release tag: the major the booth uses (v1) or a
-    full version (v1.2.0). Also read from $env:BOOTH_RELEASE. Without it, the
-    checkout tracks main (switching back from an earlier release if needed).
+    Checks out the release tag: the major the booth uses (v1) or a full
+    version (v1.2.0). Also read from $env:BOOTH_RELEASE. Without one, a
+    checkout pinned to a release (detached HEAD) switches back to its default
+    branch and pulls it (untested main), while a checkout on a branch stays
+    on that branch and pulls it.
 
 .PARAMETER Uninstall
     Removes only the loader file. The checkout and the launcher's run history

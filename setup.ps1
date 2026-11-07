@@ -23,9 +23,11 @@
     already installed. Set $env:FORCE_REINSTALL = "true" to redo them.
 
 .PARAMETER Ref
-    Pins $HOME\repos\repo-setup-scripts to a release tag: the major the booth
-    uses (v1) or a full version (v1.2.0). Also read from $env:BOOTH_RELEASE.
-    Without it, an existing checkout is left as is.
+    Checks out $HOME\repos\repo-setup-scripts at a release tag: the major
+    the booth uses (v1) or a full version (v1.2.0). Also read from
+    $env:BOOTH_RELEASE. Without one, a checkout pinned to a release (detached
+    HEAD) switches back to its default branch and pulls it (untested main),
+    while a checkout already on a branch is left as is.
 
 .EXAMPLE
     .\setup.ps1 -Ref v1
