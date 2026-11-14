@@ -4,8 +4,6 @@ Guide for AI coding agents and new maintainers. It summarizes the practices to f
 
 ## What this repo is
 
-Booth machine setup for GitHub event booths. It's public and MIT-licensed.
-
 - **macOS:** [`setup.sh`](setup.sh), [`install-demo-launcher.sh`](install-demo-launcher.sh) (also works on Linux), and iTerm2 color schemes in [`iterm2/`](iterm2/).
 - **Windows:** [`setup.ps1`](setup.ps1), [`install-demo-launcher.ps1`](install-demo-launcher.ps1), and [`windows/demo-launcher-loader.mjs`](windows/demo-launcher-loader.mjs) (a fallback copy of repo-setup-scripts' loader; keep it in sync).
 - **[`mcp-bundle/`](mcp-bundle/package.json)** pins the prebuilt Playwright MCP server. The [Playwright MCP bundle workflow](.github/workflows/playwright-mcp-bundle.yml) publishes it as the `playwright-mcp-v<version>` release, and setup and `install-demo-launcher` install it from there, never with `npx` (booth machines can't reach npm). See [Playwright MCP server](README.md#playwright-mcp-server).
@@ -25,7 +23,7 @@ Docs to read first:
 - A release tags **both** repos with the same `vX.Y.Z`, at the commits that were tested on a booth Mac and a Windows machine, then moves the matching major tag (`v1`) to it.
 - Never move or delete a pushed `vX.Y.Z` tag. Only the major tag moves.
 - **Agents must not create, move, or delete tags, or publish releases, unless explicitly asked.**
-- The Playwright MCP bundle workflow publishes its own `playwright-mcp-v<version>` release when a version bump merges to `main`. Those releases are separate from `vX.Y.Z`. Never replace or delete one. Don't run the workflow by hand unless asked.
+- The Playwright MCP bundle workflow publishes its own `playwright-mcp-v<version>` release when a version bump merges to `main`. Never replace one. Don't run the workflow by hand unless asked.
 
 ## Change rules
 
@@ -33,14 +31,13 @@ Follow these when changing the scripts, and check for them when reviewing a pull
 
 - **Parity.** When a feature applies to both platforms, change `setup.sh`/`install-demo-launcher.sh` and `setup.ps1`/`install-demo-launcher.ps1` together, with matching behavior and messages.
 - **Windows PowerShell 5.1.** Fresh Windows machines only have 5.1, so the `.ps1` scripts must run there. No PowerShell 7-only syntax (`??`, `?.`, ternary `? :`, `&&`/`||` pipeline chains, `ForEach-Object -Parallel`, etc.).
-- **Native commands on Windows.** Run `git`, `gh`, `winget`, and editor CLIs through the native-command helper (`Invoke-NativeCommand` in `setup.ps1`, shared with `install-demo-launcher.ps1`). In 5.1, `2>&1` turns normal stderr progress into red `ErrorRecord`s, and under `$ErrorActionPreference = 'Stop'` it throws even with `2>$null`. The helper prints stderr as plain text and leaves success to `$LASTEXITCODE`. Interactive `gh auth login`/`refresh` stay direct.
+- **Native commands on Windows.** Run `git`, `gh`, `winget`, and editor CLIs through the native-command helpers (`Get-NativeCommandOutput` for parsed values, otherwise `Invoke-NativeCommand`, in `setup.ps1`, shared with `install-demo-launcher.ps1`). In 5.1, `2>&1` turns normal stderr progress into red `ErrorRecord`s, and under `$ErrorActionPreference = 'Stop'` it throws even with `2>$null`. `Invoke-NativeCommand` prints stderr as plain text and leaves success to `$LASTEXITCODE`. Interactive `gh auth login`/`refresh` stay direct.
 - **Admin.** `install-demo-launcher.ps1` must not require an Administrator prompt. `setup.ps1` needs Terminal (Admin) for some steps; it warns and skips them when not elevated (`Test-IsAdmin`, `Write-NotAdminWarning`).
-- **Trusted origin.** Keep the checks that only fetch, pull, check out, or install the loader for a checkout whose `origin` is `octobooth-demos/repo-setup-scripts` (`demo_launcher_remote_trusted` in `setup.sh`, `Test-DemoLauncherRemote` in `setup.ps1`). The loader runs that code in every Copilot chat.
+- **Trusted origin.** Keep the checks that only fetch, pull, check out, or install the loader for a checkout whose `origin` is `octobooth-demos/repo-setup-scripts` (`demo_launcher_remote_trusted` in `setup.sh`, `Test-DemoLauncherRemote` in `setup.ps1`).
 - **Release tag check.** Keep the `git ls-remote` check that a release tag exists on GitHub before checking it out (`checkout_booth_release` in `setup.sh`, `Switch-DemoLauncherRelease` in `setup.ps1`). The scripts stop without changing the checkout if the tag is missing or the checkout has local changes.
 - **Testable scripts.** The scripts guard their main entry point so tests can source or dot-source them without installing anything. Keep that guard.
 - **Tests and CI.** Update the bats tests (`tests/bash`) and Pester tests (`tests/powershell`) with behavior changes, and keep [CI](.github/workflows/ci.yml) green, including the Windows PowerShell 5.1 job. When adding a `config.json` key, add it to the CI shape check.
 - **Docs.** Update the README and booth playbook in the same PR as the behavior change. Write for booth staff: short steps with the exact commands to type.
-- **Tags.** Never move or delete a pushed `vX.Y.Z` tag; only the major tag moves (see [Branches and releases](#branches-and-releases)).
 
 ## Accounts
 
