@@ -23,7 +23,7 @@ Docs to read first:
 - A release tags **both** repos with the same `vX.Y.Z`, at the commits that were tested on a booth Mac and a Windows machine, then moves the matching major tag (`v1`) to it.
 - Never move or delete a pushed `vX.Y.Z` tag. Only the major tag moves.
 - **Agents must not create, move, or delete tags, or publish releases, unless explicitly asked.**
-- The Playwright MCP bundle workflow publishes its own `playwright-mcp-v<version>` release when a version bump merges to `main`. Those releases are separate from `vX.Y.Z`. Never replace or delete one. Don't run the workflow by hand unless asked.
+- The Playwright MCP bundle workflow publishes its own `playwright-mcp-v<version>` release when a version bump merges to `main`. Never replace one. Don't run the workflow by hand unless asked.
 
 ## Change rules
 
