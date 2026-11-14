@@ -596,6 +596,8 @@ The GitHub Actions workflow validates syntax, linting, configuration shape, and 
 
 #### Bash
 
+When writing Bats output assertions, use `[[ ... ]] || false` so mismatches fail on macOS.
+
 ```bash
 shellcheck -x setup.sh install-demo-launcher.sh
 bash -n setup.sh && bash -n install-demo-launcher.sh
