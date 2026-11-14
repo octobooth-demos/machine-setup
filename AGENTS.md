@@ -38,7 +38,6 @@ Follow these when changing the scripts, and check for them when reviewing a pull
 - **Testable scripts.** The scripts guard their main entry point so tests can source or dot-source them without installing anything. Keep that guard.
 - **Tests and CI.** Update the bats tests (`tests/bash`) and Pester tests (`tests/powershell`) with behavior changes, and keep [CI](.github/workflows/ci.yml) green, including the Windows PowerShell 5.1 job. When adding a `config.json` key, add it to the CI shape check.
 - **Docs.** Update the README and booth playbook in the same PR as the behavior change. Write for booth staff: short steps with the exact commands to type.
-- **Tags.** Never move or delete a pushed `vX.Y.Z` tag; only the major tag moves (see [Branches and releases](#branches-and-releases)).
 
 ## Accounts
 
